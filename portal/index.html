@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Member Login — RITS</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="../Media/logo.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;600;700&family=Cormorant+Garamond:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+<div class="login-shell">
+  <div class="login-card">
+    <img src="../Media/logo.png" alt="Rhode Island Tamil Sangam emblem">
+    <h1>Member Portal</h1>
+    <p>Sign in to update your info and RSVP to events.</p>
+    <div class="login-error" id="login-error" role="alert"></div>
+    <form id="login-form">
+      <div class="form-row">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required autocomplete="username">
+      </div>
+      <div class="form-row">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required autocomplete="current-password">
+      </div>
+      <p style="text-align:right; margin:-0.5rem 0 0.75rem;"><a href="forgot-password.html" style="font-size:.85rem; color:var(--maroon); font-weight:600;">Forgot password?</a></p>
+      <button type="submit" class="btn btn-primary" style="width:100%; margin-top:.5rem;">Sign In</button>
+    </form>
+    <p class="login-footer-note">Not a member yet? <a href="../index.html#contact">Join RITS</a></p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script>
+  var form = document.getElementById("login-form");
+  var errorBox = document.getElementById("login-error");
+
+  if (localStorage.getItem("rits_member_token")) {
+    window.location.href = "dashboard.html";
+  }
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    errorBox.classList.remove("is-visible");
+
+    var email = document.getElementById("email").value.trim();
+    var password = document.getElementById("password").value;
+
+    try {
+      var res = await fetch(window.RITS_API_BASE + "/auth/member/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, password: password }),
+      });
+      var data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+      localStorage.setItem("rits_member_token", data.token);
+      localStorage.setItem("rits_member_info", JSON.stringify(data.member));
+      window.location.href = "dashboard.html";
+    } catch (err) {
+      errorBox.textContent = err.message || "Could not reach the server. Is the backend running?";
+      errorBox.classList.add("is-visible");
+    }
+  });
+</script>
+</body>
+</html>

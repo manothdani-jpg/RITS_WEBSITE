@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — RITS Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="../Media/logo.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;600;700&family=Cormorant+Garamond:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<div class="admin-shell">
+  <aside class="admin-sidebar">
+    <div class="admin-brand">
+      <img src="../Media/logo.png" alt="">
+      <span>RITS Admin</span>
+    </div>
+    <nav class="admin-nav">
+      <button data-view="members" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Members
+      </button>
+      <button data-view="events">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Events
+      </button>
+      <button data-view="homepage">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+        Homepage
+      </button>
+      <button data-view="media">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        Media
+      </button>
+      <button data-view="board-roster">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2.5"/><path d="M6 17c0-2 1.5-3.5 3-3.5s3 1.5 3 3.5"/><path d="M14 9h4M14 13h4"/></svg>
+        Board Roster
+      </button>
+      <button data-view="volunteers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Volunteers
+      </button>
+      <button data-view="communications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+        Communications
+      </button>
+      <button data-view="payment">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+        Payment Page
+      </button>
+      <button data-view="reports">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/></svg>
+        Reports
+      </button>
+      <button data-view="admins" id="nav-admins-btn" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Admin Logins
+      </button>
+    </nav>
+    <div class="admin-sidebar-footer">
+      <div class="admin-who">
+        Signed in as
+        <strong id="who-name">&mdash;</strong>
+      </div>
+      <button class="btn btn-outline btn-sm" id="logout-btn" style="color:var(--maroon); border-color:var(--maroon);">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <!-- ==================== Members view ==================== -->
+    <section id="view-members">
+      <div class="admin-topbar">
+        <div>
+          <h1>Members</h1>
+          <p>Household records, membership status, and dues.</p>
+        </div>
+        <button class="btn btn-primary" id="add-member-btn">+ Add Member</button>
+      </div>
+
+      <div class="stat-row" id="member-stats"></div>
+
+      <div class="admin-toolbar">
+        <input type="search" id="member-search" placeholder="Search name or email…">
+        <select id="filter-tier">
+          <option value="">All tiers</option>
+        </select>
+        <select id="filter-status">
+          <option value="">All payment statuses</option>
+          <option value="paid">Paid</option>
+          <option value="pending">Pending</option>
+          <option value="overdue">Overdue</option>
+          <option value="waived">Waived</option>
+        </select>
+        <span class="spacer"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Email</th><th>Phone</th><th>Tier</th><th>Payment</th><th>Joined</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="members-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="members-empty" style="display:none;">No members match your filters yet.</div>
+      </div>
+    </section>
+
+    <!-- ==================== Events view ==================== -->
+    <section id="view-events" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Events</h1>
+          <p>Upcoming gatherings and RSVP counts.</p>
+        </div>
+        <button class="btn btn-primary" id="add-event-btn">+ Add Event</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Event</th><th>Date</th><th>Location</th><th>RSVPs</th><th></th></tr>
+          </thead>
+          <tbody id="events-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="events-empty" style="display:none;">No events yet.</div>
+      </div>
+    </section>
+
+    <!-- ==================== Homepage content view ==================== -->
+    <section id="view-homepage" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Homepage Content</h1>
+          <p>Text shown on the public homepage — saves live.</p>
+        </div>
+        <a class="btn btn-outline-dark btn-sm" href="../index.html" target="_blank" style="color:var(--maroon); border-color:var(--maroon);">View Live Page</a>
+      </div>
+
+      <div class="table-wrap" style="padding:1.75rem;">
+        <form id="homepage-form">
+          <div class="section-title" style="margin-top:0;">Hero</div>
+          <div class="form-row"><label for="hc-hero-heading">Headline</label><input id="hc-hero-heading"></div>
+          <div class="form-row"><label for="hc-hero-motto">Tamil motto</label><input id="hc-hero-motto"></div>
+          <div class="form-row"><label for="hc-hero-lede">Subheading</label><textarea id="hc-hero-lede" rows="2"></textarea></div>
+          <div class="field-grid" style="margin-bottom:1.1rem;">
+            <div class="form-row"><label for="hc-stat-families">Member families (stat)</label><input id="hc-stat-families"></div>
+            <div class="form-row"><label for="hc-stat-events">Events / year (stat)</label><input id="hc-stat-events"></div>
+            <div class="form-row"><label for="hc-stat-founded">Founded year (stat)</label><input id="hc-stat-founded"></div>
+          </div>
+
+          <div class="section-title">About</div>
+          <div class="form-row"><label for="hc-mission">Mission statement</label><textarea id="hc-mission" rows="3"></textarea></div>
+          <div class="form-row"><label for="hc-bullet-founded">Bullet — founded</label><input id="hc-bullet-founded"></div>
+          <div class="form-row"><label for="hc-bullet-nonprofit">Bullet — nonprofit status</label><input id="hc-bullet-nonprofit"></div>
+          <div class="form-row"><label for="hc-bullet-serving">Bullet — who we serve</label><input id="hc-bullet-serving"></div>
+
+          <div class="section-title">Get Involved</div>
+          <div class="form-row"><label for="hc-membership-note">Membership fee note</label><input id="hc-membership-note"></div>
+          <div class="form-row"><label for="hc-sponsor-note">Sponsorship note</label><input id="hc-sponsor-note"></div>
+
+          <div class="section-title">Contact</div>
+          <div class="field-grid" style="margin-bottom:1.1rem;">
+            <div class="form-row"><label for="hc-contact-email">Email</label><input id="hc-contact-email"></div>
+            <div class="form-row"><label for="hc-contact-phone">Phone</label><input id="hc-contact-phone"></div>
+          </div>
+          <div class="form-row"><label for="hc-contact-location">Location</label><input id="hc-contact-location"></div>
+
+          <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ==================== Media view (gallery + sponsors) ==================== -->
+    <section id="view-media" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Media</h1>
+          <p>Gallery photos and sponsor logos shown on the homepage.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="padding:1.75rem; margin-bottom:1.75rem;">
+        <div class="section-title" style="margin-top:0;">Gallery Photos</div>
+        <form id="gallery-upload-form" class="add-family-row" style="margin-bottom:1.5rem; flex-wrap:wrap;">
+          <input type="file" id="gallery-file" accept="image/png,image/jpeg,image/webp,image/gif" required style="flex:1; min-width:200px;">
+          <input type="text" id="gallery-caption" placeholder="Caption (optional)" style="flex:1; min-width:160px;">
+          <button type="submit" class="btn btn-primary btn-sm">Upload Photo</button>
+        </form>
+        <div id="gallery-media-grid" class="media-grid"></div>
+        <div class="empty-note" id="gallery-media-empty" style="display:none;">No photos uploaded yet.</div>
+      </div>
+
+      <div class="table-wrap" style="padding:1.75rem;">
+        <div class="section-title" style="margin-top:0;">Sponsors</div>
+        <form id="sponsor-upload-form" class="add-family-row" style="margin-bottom:1.5rem; flex-wrap:wrap;">
+          <input type="file" id="sponsor-file" accept="image/png,image/jpeg,image/webp,image/gif" required style="flex:1; min-width:200px;">
+          <input type="text" id="sponsor-name" placeholder="Sponsor name" required style="flex:1; min-width:160px;">
+          <input type="url" id="sponsor-url" placeholder="Website (optional)" style="flex:1; min-width:160px;">
+          <button type="submit" class="btn btn-primary btn-sm">Upload Logo</button>
+        </form>
+        <div id="sponsor-media-grid" class="media-grid"></div>
+        <div class="empty-note" id="sponsor-media-empty" style="display:none;">No sponsors added yet.</div>
+      </div>
+    </section>
+
+    <!-- ==================== Board Roster view ==================== -->
+    <section id="view-board-roster" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Board Roster</h1>
+          <p>Public "Board of Directors" bios shown on the homepage — name, title, photo, and years served.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="padding:1.75rem; margin-bottom:1.75rem;">
+        <form id="board-profile-form" class="field-grid">
+          <div class="form-row">
+            <label for="board-name">Name</label>
+            <input id="board-name" required>
+          </div>
+          <div class="form-row">
+            <label for="board-title">Title</label>
+            <input id="board-title" placeholder="e.g. President, Treasurer" required>
+          </div>
+          <div class="form-row">
+            <label for="board-start-year">Term start year</label>
+            <input type="number" id="board-start-year" min="1900" max="2200" required>
+          </div>
+          <div class="form-row">
+            <label for="board-end-year">Term end year</label>
+            <input type="number" id="board-end-year" min="1900" max="2200" placeholder="Leave blank if current">
+          </div>
+          <div class="form-row full">
+            <label for="board-photo">Photo (optional)</label>
+            <input type="file" id="board-photo" accept="image/png,image/jpeg,image/webp,image/gif">
+          </div>
+          <div class="form-row" style="align-self:end;">
+            <button type="submit" class="btn btn-primary btn-sm" id="board-profile-submit">Add to Roster</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section-title" style="margin-top:0;">Current Board</div>
+      <div id="board-current-list" class="media-grid" style="margin-bottom:1.75rem;"></div>
+      <div class="empty-note" id="board-current-empty" style="display:none;">No current board members yet.</div>
+
+      <div class="section-title">Past Board Members</div>
+      <div id="board-past-list" class="media-grid"></div>
+      <div class="empty-note" id="board-past-empty" style="display:none;">No past board members recorded.</div>
+    </section>
+
+    <!-- ==================== Volunteers view ==================== -->
+    <section id="view-volunteers" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Volunteers</h1>
+          <p>Signups from the public site's Volunteer form.</p>
+        </div>
+        <button class="btn btn-primary" id="volunteers-export-btn">Export CSV</button>
+      </div>
+
+      <div class="admin-toolbar">
+        <select id="volunteer-filter-status">
+          <option value="">All statuses</option>
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <span class="spacer"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Email</th><th>Phone</th><th>Interests</th><th>Note</th><th>Signed Up</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="volunteers-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="volunteers-empty" style="display:none;">No volunteer signups match your filter yet.</div>
+      </div>
+    </section>
+
+    <!-- ==================== Communications view ==================== -->
+    <section id="view-communications" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Communications</h1>
+          <p>Email an announcement to your members.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="padding:1.75rem;">
+        <form id="comms-form">
+          <div class="form-row">
+            <label for="comms-subject">Subject</label>
+            <input id="comms-subject" required>
+          </div>
+          <div class="form-row">
+            <label for="comms-body">Message</label>
+            <textarea id="comms-body" rows="8" required placeholder="Hi {{first_name}},&#10;&#10;..."></textarea>
+            <p class="form-note">Use <code>{{first_name}}</code> to personalize the greeting for each recipient.</p>
+          </div>
+          <div class="field-grid" style="margin-bottom:1.1rem;">
+            <div class="form-row">
+              <label for="comms-tier">Membership tier</label>
+              <select id="comms-tier">
+                <option value="">All tiers</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="comms-status">Payment status</label>
+              <select id="comms-status">
+                <option value="">All statuses</option>
+                <option value="paid">Paid</option>
+                <option value="pending">Pending</option>
+                <option value="overdue">Overdue</option>
+                <option value="waived">Waived</option>
+              </select>
+            </div>
+          </div>
+          <p class="form-note" id="comms-recipient-count" style="margin-bottom:1rem;">Loading recipient count…</p>
+          <button type="submit" class="btn btn-primary btn-sm" id="comms-send-btn">Send Email</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ==================== Payment Page settings view ==================== -->
+    <section id="view-payment" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Payment Page</h1>
+          <p>Controls what members see on the public dues/payment page.</p>
+        </div>
+        <a class="btn btn-outline-dark btn-sm" href="../payment.html" target="_blank" style="color:var(--maroon); border-color:var(--maroon);">View Live Page</a>
+      </div>
+
+      <div class="table-wrap" style="padding:1.75rem; margin-bottom:1.75rem;">
+        <form id="payment-settings-form">
+          <div class="form-row">
+            <label for="pay-heading">Page heading</label>
+            <input id="pay-heading" required>
+          </div>
+          <div class="form-row">
+            <label for="pay-intro">Intro text</label>
+            <textarea id="pay-intro" rows="2"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="pay-instructions">Payment instructions</label>
+            <textarea id="pay-instructions" rows="4"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+        </form>
+      </div>
+
+      <div class="admin-topbar" style="margin-bottom:1.25rem;">
+        <div>
+          <h1 style="font-size:1.15rem;">Membership Categories</h1>
+          <p>Fees and categories members can choose from — active ones appear on the signup form and payment page. Archiving hides a category from new selections without affecting members already in it.</p>
+        </div>
+      </div>
+      <div class="table-wrap" style="padding:1.75rem;">
+        <div id="membership-categories-list" style="margin-bottom:1.25rem;"></div>
+        <form id="category-form" class="field-grid">
+          <div class="form-row">
+            <label for="category-label">Category name</label>
+            <input id="category-label" placeholder="e.g. Senior, Couple" required>
+          </div>
+          <div class="form-row">
+            <label for="category-amount">Dues ($)</label>
+            <input type="number" min="0" step="0.01" id="category-amount" required>
+          </div>
+          <div class="form-row" style="align-self:end;">
+            <button type="submit" class="btn btn-primary btn-sm">Add Category</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ==================== Reports view ==================== -->
+    <section id="view-reports" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Reports</h1>
+          <p>Membership overview and full data export.</p>
+        </div>
+        <button class="btn btn-primary" id="export-csv-btn">Export Members CSV</button>
+      </div>
+
+      <div class="stat-row" id="report-stats"></div>
+
+      <div class="table-wrap" style="padding:1.75rem; margin-bottom:1.75rem;">
+        <div class="section-title" style="margin-top:0;">By Membership Tier</div>
+        <div id="report-by-tier" class="pill-list" style="margin-bottom:1.5rem;"></div>
+        <div class="section-title">By Payment Status</div>
+        <div id="report-by-status" class="pill-list"></div>
+      </div>
+
+      <div class="admin-topbar" style="margin-bottom:1.25rem;">
+        <div>
+          <h1 style="font-size:1.15rem;">Recent Payments</h1>
+          <p>Square checkouts, most recent first — includes in-progress and failed attempts.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Member</th><th>For</th><th>Amount</th><th>Status</th><th>Date</th></tr>
+          </thead>
+          <tbody id="payments-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="payments-empty" style="display:none;">No payments yet.</div>
+      </div>
+
+      <div class="admin-topbar" style="margin-bottom:1.25rem;">
+        <div>
+          <h1 style="font-size:1.15rem;">Event RSVP Breakdown</h1>
+          <p>Registrations and revenue per event, by pricing option. Quantities include pending-payment registrations (for headcount planning); "Collected" is settled money only — "Pending" is what's expected once Square confirms.</p>
+        </div>
+      </div>
+      <div id="rsvp-breakdown-list"></div>
+      <div class="empty-state" id="rsvp-breakdown-empty" style="display:none;">No events yet.</div>
+    </section>
+
+    <!-- ==================== Admin Logins view (superadmin only) ==================== -->
+    <section id="view-admins" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Admin Logins</h1>
+          <p>Super admins and board directors who can log into this dashboard. For the public "Board of Directors" bios, see "Board Roster".</p>
+        </div>
+        <button class="btn btn-primary" id="add-admin-btn">+ Add Admin Login</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Added</th><th></th></tr>
+          </thead>
+          <tbody id="admins-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="admins-empty" style="display:none;">No board members yet.</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ==================== Member modal (add/edit) ==================== -->
+<div class="modal-backdrop" id="member-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="member-modal-title">Add Member</h2>
+      <button class="modal-close" id="member-modal-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="member-form">
+      <input type="hidden" id="member-id">
+      <div class="field-grid">
+        <div class="form-row"><label for="f-first-name">First name</label><input id="f-first-name" required></div>
+        <div class="form-row"><label for="f-last-name">Last name</label><input id="f-last-name" required></div>
+        <div class="form-row full"><label for="f-email">Email</label><input type="email" id="f-email" required></div>
+        <div class="form-row"><label for="f-phone">Phone</label><input id="f-phone"></div>
+        <div class="form-row"><label for="f-tier">Membership tier</label>
+          <select id="f-tier"></select>
+        </div>
+        <div class="form-row"><label for="f-status">Payment status</label>
+          <select id="f-status">
+            <option value="pending">Pending</option>
+            <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
+            <option value="waived">Waived</option>
+          </select>
+        </div>
+        <div class="form-row"><label for="f-renewal">Renewal date</label><input type="date" id="f-renewal"></div>
+        <div class="form-row full"><label for="f-address1">Address</label><input id="f-address1" placeholder="Street address"></div>
+        <div class="form-row"><label for="f-city">City</label><input id="f-city"></div>
+        <div class="form-row"><label for="f-zip">ZIP</label><input id="f-zip"></div>
+        <div class="form-row full"><label for="f-notes">Notes</label><textarea id="f-notes" rows="2"></textarea></div>
+      </div>
+
+      <div id="family-section" style="display:none;">
+        <div class="section-title">Family Members</div>
+        <div class="pill-list" id="family-pills"></div>
+        <div style="display:flex; gap:.5rem; margin-top:.75rem;">
+          <input id="new-family-name" placeholder="Name" style="flex:1; border:1.5px solid color-mix(in srgb, var(--rule) 35%, transparent); border-radius:var(--radius-sm); padding:.55em .7em;">
+          <select id="new-family-relationship" style="border:1.5px solid color-mix(in srgb, var(--rule) 35%, transparent); border-radius:var(--radius-sm); padding:.55em .5em;">
+            <option value="spouse">Spouse</option>
+            <option value="child" selected>Child</option>
+            <option value="parent">Parent</option>
+            <option value="other">Other</option>
+          </select>
+          <button type="button" class="btn btn-outline-dark btn-sm" id="add-family-btn">Add</button>
+        </div>
+      </div>
+
+      <div id="rsvp-section" style="display:none;">
+        <div class="section-title">Event RSVPs</div>
+        <div id="rsvp-list" style="font-size:.88rem; color:var(--text-soft);"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline-dark btn-sm" id="delete-member-btn" style="display:none; margin-right:auto;">Delete Member</button>
+        <button type="button" class="btn btn-outline-dark btn-sm" id="member-cancel-btn">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== Event modal (add) ==================== -->
+<div class="modal-backdrop" id="event-modal">
+  <div class="modal" style="width:min(100%,460px);">
+    <div class="modal-head">
+      <h2>Add Event</h2>
+      <button class="modal-close" id="event-modal-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="event-form">
+      <div class="form-row"><label for="ev-name">Event name</label><input id="ev-name" required></div>
+      <div class="form-row"><label for="ev-date">Date &amp; time</label><input type="datetime-local" id="ev-date" required></div>
+      <div class="form-row"><label for="ev-location">Location</label><input id="ev-location"></div>
+      <div class="form-row"><label for="ev-description">Description</label><textarea id="ev-description" rows="3"></textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline-dark btn-sm" id="event-cancel-btn">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Create Event</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== Event pricing modal ==================== -->
+<div class="modal-backdrop" id="pricing-modal">
+  <div class="modal" style="width:min(100%,480px);">
+    <div class="modal-head">
+      <h2 id="pricing-modal-title">Pricing</h2>
+      <button class="modal-close" id="pricing-modal-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p class="form-note" style="margin-bottom:1rem;">Add a <strong>Participation</strong> option for each way someone can register (member picks one), or an <strong>Add-on</strong> for optional extras like food (priced per person). Leave everything empty and this event stays free. <strong>Non-member price</strong> applies automatically to any registrant whose dues aren't currently paid — leave it equal to the member price if there's no discount.</p>
+    <div id="pricing-options-list" style="margin-bottom:1.25rem;"></div>
+    <form id="pricing-form">
+      <div class="field-grid">
+        <div class="form-row">
+          <label for="pricing-kind">Type</label>
+          <select id="pricing-kind">
+            <option value="participation">Participation</option>
+            <option value="addon">Add-on</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="pricing-member-amount">Member price ($)</label>
+          <input type="number" min="0" step="0.01" id="pricing-member-amount" required>
+        </div>
+        <div class="form-row">
+          <label for="pricing-nonmember-amount">Non-member price ($)</label>
+          <input type="number" min="0" step="0.01" id="pricing-nonmember-amount" required>
+        </div>
+        <div class="form-row full">
+          <label for="pricing-label">Label</label>
+          <input id="pricing-label" placeholder="e.g. Single, Team, Food (per person)" required>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline-dark btn-sm" id="pricing-close-btn">Done</button>
+        <button type="submit" class="btn btn-primary btn-sm">Add Option</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== Event attendees modal ==================== -->
+<div class="modal-backdrop" id="attendees-modal">
+  <div class="modal" style="width:min(100%,640px);">
+    <div class="modal-head">
+      <h2 id="attendees-modal-title">Attendees</h2>
+      <button class="modal-close" id="attendees-modal-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Member (Now)</th><th>Member (At Signup)</th><th>Selections</th><th>Amount</th><th>Status</th></tr>
+        </thead>
+        <tbody id="attendees-tbody"></tbody>
+      </table>
+      <div class="empty-state" id="attendees-empty" style="display:none;">No one has registered for this event yet.</div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline-dark btn-sm" id="attendees-close-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Board member modal (add/edit) ==================== -->
+<div class="modal-backdrop" id="admin-modal">
+  <div class="modal" style="width:min(100%,460px);">
+    <div class="modal-head">
+      <h2 id="admin-modal-title">Add Admin Login</h2>
+      <button class="modal-close" id="admin-modal-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="admin-form">
+      <input type="hidden" id="admin-id">
+      <div class="form-row"><label for="a-name">Name</label><input id="a-name" required></div>
+      <div class="form-row"><label for="a-email">Email</label><input type="email" id="a-email" required></div>
+      <div class="form-row"><label for="a-role">Role</label>
+        <select id="a-role">
+          <option value="board">Board Director</option>
+          <option value="superadmin">Super Admin</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label for="a-password" id="a-password-label">Password</label>
+        <input type="password" id="a-password" minlength="8" placeholder="At least 8 characters">
+        <p class="form-note" id="a-password-hint" style="margin-top:.3rem;">Leave blank to keep the current password.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline-dark btn-sm" id="delete-admin-btn" style="display:none; margin-right:auto;">Remove</button>
+        <button type="button" class="btn btn-outline-dark btn-sm" id="admin-cancel-btn">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>

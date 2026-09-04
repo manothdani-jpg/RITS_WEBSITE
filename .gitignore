@@ -1,0 +1,13 @@
+.DS_Store
+*.demo-backup
+
+# Backend
+backend/node_modules/
+backend/.env
+backend/*.log
+backend/uploads/gallery/*
+backend/uploads/sponsors/*
+backend/uploads/board/*
+!backend/uploads/gallery/.gitkeep
+!backend/uploads/sponsors/.gitkeep
+!backend/uploads/board/.gitkeep

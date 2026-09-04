@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Account — RITS</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="../Media/logo.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;600;700&family=Cormorant+Garamond:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+<header class="portal-header">
+  <a class="portal-brand" href="../index.html">
+    <img src="../Media/logo.png" alt="">
+    <span>RITS Member Portal</span>
+  </a>
+  <button class="btn btn-outline-dark btn-sm" id="logout-btn" style="color:var(--maroon); border-color:var(--maroon);">Sign Out</button>
+</header>
+
+<main class="portal-main">
+  <div class="profile-head">
+    <div>
+      <h1 id="profile-name">&mdash;</h1>
+      <p id="profile-email">&mdash;</p>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge-tier" id="profile-tier">&mdash;</span>
+      <span class="badge" id="profile-status">&mdash;</span>
+      <button class="btn btn-primary btn-sm" id="pay-now-btn">Pay Dues Online</button>
+    </div>
+  </div>
+  <p class="hint" id="profile-expiry" style="margin:-0.75rem 0 1rem;"></p>
+  <p class="form-note" id="pay-now-error" style="display:none; color:var(--maroon); margin:-0.5rem 0 1.5rem;"></p>
+
+  <!-- ==================== Contact info ==================== -->
+  <section class="portal-card">
+    <h2>My Contact Info</h2>
+    <p class="hint">Your name, email, membership tier, and payment status are managed by the board. Contact them to change those.</p>
+    <form id="contact-form">
+      <div class="field-grid">
+        <div class="form-row"><label for="c-first-name">First name</label><input id="c-first-name" disabled></div>
+        <div class="form-row"><label for="c-last-name">Last name</label><input id="c-last-name" disabled></div>
+        <div class="form-row full"><label for="c-email">Email</label><input id="c-email" disabled></div>
+        <div class="form-row"><label for="c-phone">Phone</label><input id="c-phone"></div>
+        <div class="form-row"><label for="c-city">City</label><input id="c-city"></div>
+        <div class="form-row full"><label for="c-address1">Address</label><input id="c-address1" placeholder="Street address"></div>
+        <div class="form-row"><label for="c-zip">ZIP</label><input id="c-zip"></div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm" style="margin-top:.5rem;">Save Changes</button>
+    </form>
+  </section>
+
+  <!-- ==================== Family members ==================== -->
+  <section class="portal-card">
+    <h2>Family Members</h2>
+    <p class="hint">Household members linked to your membership.</p>
+    <div class="pill-list" id="family-pills"></div>
+    <div class="add-family-row">
+      <input id="new-family-name" placeholder="Name">
+      <select id="new-family-relationship">
+        <option value="spouse">Spouse</option>
+        <option value="child" selected>Child</option>
+        <option value="parent">Parent</option>
+        <option value="other">Other</option>
+      </select>
+      <button type="button" class="btn btn-outline-dark btn-sm" id="add-family-btn">Add</button>
+    </div>
+  </section>
+
+  <!-- ==================== Payment history ==================== -->
+  <section class="portal-card">
+    <h2>Payment History</h2>
+    <p class="hint">Dues payments made through this account.</p>
+    <div id="payment-history-list"></div>
+  </section>
+
+  <!-- ==================== Events / RSVPs ==================== -->
+  <section class="portal-card">
+    <h2>Upcoming Events</h2>
+    <p class="hint">RSVP to let RITS know you're coming.</p>
+    <div id="events-list"></div>
+  </section>
+
+  <!-- ==================== RSVP history ==================== -->
+  <section class="portal-card">
+    <h2>My RSVP History</h2>
+    <p class="hint">Every event you've RSVP'd to, past and upcoming.</p>
+    <div id="rsvp-history-list"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/portal.js"></script>
+</body>
+</html>

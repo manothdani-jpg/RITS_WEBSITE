@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rits-site",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "python3 dev-server.py \"$PORT\""],
+      "port": 8420,
+      "autoPort": true
+    }
+  ]
+}

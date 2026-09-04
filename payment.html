@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Membership Dues — RITS</title>
+<meta name="description" content="Rhode Island Tamil Sangam membership dues and payment instructions.">
+<link rel="icon" href="Media/logo.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;600;700&family=Cormorant+Garamond:wght@500;600;700&family=Noto+Sans+Tamil:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .pay-shell{ max-width:760px; margin:0 auto; padding:clamp(2.5rem,6vw,4rem) 1.5rem 5rem; }
+  .pay-head{ text-align:center; margin-bottom:2.5rem; }
+  .pay-head h1{ font-size:clamp(1.8rem,3.6vw,2.5rem); }
+  .pay-head p{ color:var(--text-soft); max-width:56ch; margin-inline:auto; }
+  .tier-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:1.25rem; margin-bottom:2.5rem; }
+  .tier-card{ background:#fff; border:1px solid color-mix(in srgb, var(--rule) 20%, transparent); border-radius:var(--radius-md); padding:1.5rem; text-align:center; box-shadow:var(--shadow-card); }
+  .tier-card h3{ font-size:1rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-soft); margin-bottom:.5rem; }
+  .tier-card .amount{ font-family:var(--font-display); font-size:2rem; color:var(--maroon); }
+  .instructions-card{ background:var(--cream); border-radius:var(--radius-lg); padding:clamp(1.5rem,3vw,2.25rem); box-shadow:var(--shadow-card); white-space:pre-wrap; line-height:1.7; }
+  .instructions-card h2{ font-size:1.1rem; margin-bottom:.75rem; white-space:normal; }
+  @media (max-width:520px){ .tier-grid{ grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <img src="Media/logo.png" alt="Rhode Island Tamil Sangam emblem" width="44" height="44">
+      <span class="brand-text">
+        <span class="full">RI Tamil Sangam</span>
+        <span class="sub">RITS &middot; est. community</span>
+      </span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html#about">About</a></li>
+        <li><a href="index.html#events">Events</a></li>
+        <li><a href="index.html#involved">Get Involved</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+        <li><a href="portal/">Member Login</a></li>
+      </ul>
+      <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="pay-shell">
+    <div class="pay-head">
+      <span class="eyebrow">Membership</span>
+      <h1 id="pay-heading">Membership Dues</h1>
+      <p id="pay-intro">Loading…</p>
+    </div>
+
+    <div class="tier-grid" id="tier-grid"></div>
+
+    <div class="instructions-card" style="margin-bottom:1.5rem; text-align:center;">
+      <h2 style="margin-bottom:.5rem;">Pay Online</h2>
+      <p style="margin-bottom:1.25rem; color:var(--text-soft);">Log in to your member portal to pay your dues securely online via Square.</p>
+      <a class="btn btn-primary" href="portal/">Log In to Pay</a>
+    </div>
+
+    <div class="instructions-card">
+      <h2>Other Ways to Pay</h2>
+      <div id="pay-instructions">Loading…</div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="border-top:none; padding-top:0;">
+      <span>&copy; <span id="year"></span> Rhode Island Tamil Sangam. All rights reserved.</span>
+      <span><a href="index.html" style="color:var(--gold-bright); text-decoration:none;">Back to home</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script>
+  document.getElementById("year").textContent = new Date().getFullYear();
+
+  var navToggle = document.getElementById("nav-toggle");
+  var navLinks = document.getElementById("nav-links");
+  navToggle.addEventListener("click", function () {
+    var isOpen = navLinks.classList.toggle("is-open");
+    navToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
+
+  (async function () {
+    try {
+      var res = await fetch(window.RITS_API_BASE + "/payment-settings");
+      var data = await res.json();
+
+      document.getElementById("pay-heading").textContent = data.content.heading;
+      document.getElementById("pay-intro").textContent = data.content.intro_text;
+      document.getElementById("pay-instructions").textContent = data.content.instructions;
+
+      document.getElementById("tier-grid").innerHTML = data.tiers.map(function (t) {
+        var amount = (t.amount_cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
+        return (
+          '<div class="tier-card">' +
+          "<h3>" + t.label + "</h3>" +
+          '<div class="amount">' + amount + "</div>" +
+          "</div>"
+        );
+      }).join("");
+    } catch (err) {
+      document.getElementById("pay-intro").textContent = "Couldn't load payment info right now — please check back later or contact the board directly.";
+      document.getElementById("pay-instructions").textContent = "";
+    }
+  })();
+</script>
+</body>
+</html>
