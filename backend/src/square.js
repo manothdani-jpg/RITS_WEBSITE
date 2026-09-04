@@ -66,4 +66,31 @@ async function createPaymentLink({ referenceId, lineItems, redirectUrl }) {
   };
 }
 
-module.exports = { getClient, createPaymentLink, WebhooksHelper };
+/**
+ * Refunds part or all of a completed Square payment.
+ * @param {{ paymentId: string, amountCents: number, idempotencyKey: string, reason?: string }} params
+ * @returns {Promise<{ refundId: string, status: string }>}
+ */
+async function refundPayment({ paymentId, amountCents, idempotencyKey, reason }) {
+  const c = getClient();
+  if (!c) {
+    throw new Error(
+      "Square isn't configured yet. Set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID in the backend's .env."
+    );
+  }
+
+  const response = await c.refunds.refundPayment({
+    idempotencyKey,
+    paymentId,
+    amountMoney: { amount: BigInt(amountCents), currency: "USD" },
+    reason: reason || "Member-requested reduction in event registration",
+  });
+
+  if (!response.refund || !response.refund.id) {
+    throw new Error("Square did not return a refund confirmation");
+  }
+
+  return { refundId: response.refund.id, status: response.refund.status };
+}
+
+module.exports = { getClient, createPaymentLink, refundPayment, WebhooksHelper };

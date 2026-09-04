@@ -132,6 +132,24 @@ router.get("/me", requireMember, async (req, res) => {
     [member.id]
   );
 
+  if (rsvps.rows.length) {
+    const selections = await db.query(
+      `SELECT s.rsvp_id, s.pricing_option_id, o.kind, o.label,
+              SUM(s.quantity)::int AS quantity, SUM(s.amount_cents)::int AS amount_cents
+       FROM rsvp_selections s JOIN event_pricing_options o ON o.id = s.pricing_option_id
+       WHERE s.rsvp_id = ANY($1::uuid[])
+       GROUP BY s.rsvp_id, s.pricing_option_id, o.kind, o.label, o.display_order
+       ORDER BY o.kind, o.display_order`,
+      [rsvps.rows.map((r) => r.id)]
+    );
+    const byRsvp = new Map();
+    for (const s of selections.rows) {
+      if (!byRsvp.has(s.rsvp_id)) byRsvp.set(s.rsvp_id, []);
+      byRsvp.get(s.rsvp_id).push(s);
+    }
+    for (const r of rsvps.rows) r.selections = byRsvp.get(r.id) || [];
+  }
+
   res.json({ member, family_members: family.rows, rsvps: rsvps.rows });
 });
 

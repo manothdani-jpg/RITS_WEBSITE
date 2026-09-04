@@ -138,6 +138,7 @@ psql "$DATABASE_URL" -f db/migrations/013_membership_categories.sql
 psql "$DATABASE_URL" -f db/migrations/014_board_profiles.sql
 psql "$DATABASE_URL" -f db/migrations/015_family_member_details.sql
 psql "$DATABASE_URL" -f db/migrations/016_event_addon_topup.sql
+psql "$DATABASE_URL" -f db/migrations/017_event_selection_refunds.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -275,6 +276,7 @@ dashboard) to point at the real API URL.
 | DELETE | `/api/events/pricing/:optionId` | admin/board | Remove a pricing option |
 | POST | `/api/payments/event-checkout` | member (rate-limited) | Register for a priced event and pay via Square (or register free if the total is $0) |
 | POST | `/api/payments/event-addon-checkout` | member (rate-limited) | Buy more add-ons for an event you're already registered for, without re-charging for what you already paid |
+| PUT | `/api/payments/event-selection` | member (rate-limited) | Reduce or remove a paid add-on, refunding the difference via Square |
 | POST | `/api/volunteers` | — (rate-limited) | Public: submit a volunteer signup |
 | GET | `/api/volunteers` | admin/board | List all volunteer signups |
 | PUT | `/api/volunteers/:id` | admin/board | Update a volunteer's status |
@@ -457,6 +459,51 @@ the member's original registration exactly as it was. This is different
 from the original registration payment, which still cancels the whole
 RSVP on failure (that payment has no `pending_selections`, which is how
 `handlePaymentUpdate` tells the two cases apart).
+
+### Editing an RSVP after registering
+
+Two gaps this closes: a registered RSVP used to be a dead end (no way to
+see what you'd actually picked, or change it), and a free event's RSVP
+could only be cancelled, never adjusted.
+
+- **Free events** — the guest-count field stays editable after RSVPing
+  (previously replaced by a plain "Cancel RSVP" button once registered).
+  Editing it just calls the same `POST /api/rsvps/me` upsert used to
+  create the RSVP in the first place.
+- **Priced events** — the "Registered" state now lists exactly what was
+  selected (participation choice + each add-on with its quantity and
+  amount), sourced from a new `selections` array `GET /api/members/me`
+  attaches to each RSVP (aggregated from `rsvp_selections`, since a
+  member's picks for one option can be spread across several rows if they
+  bought more than once via "Buy More").
+- **Reducing or removing a paid add-on** — each add-on line has a
+  quantity input + "Update" button calling `PUT
+  /api/payments/event-selection` (`{event_id, option_id, quantity}`,
+  member-only). It only ever decreases — increasing goes through the
+  existing "Buy More" flow (`event-addon-checkout`) instead, so the two
+  money directions (charge vs. refund) never live in the same code path.
+
+**Refunds are real**, issued through Square's Refunds API
+(`square.js`'s `refundPayment`, wrapping `client.refunds.refundPayment`)
+against the payment(s) that funded the removed quantity — walking
+backward through that RSVP's completed event payments, newest first,
+until the refund amount is covered (a member might have paid for the same
+option across the original registration and one or more top-ups). Each
+refund is written as its own `payments` row (`status = 'refunded'`,
+`refund_of_payment_id` pointing at the payment it refunded) rather than
+mutating the original completed payment, so the reports stay a full audit
+trail rather than losing history.
+
+**Safety property:** the refund call to Square happens *before* any
+database record is touched. If it fails outright, nothing changes —
+verified directly (seeded a paid selection, forced a Square failure,
+confirmed `rsvp_selections`/`rsvps.amount_cents` were byte-for-byte
+unchanged and no `refunded` payment row was created). If Square only
+partially succeeds (refunds some but not all of the requested amount —
+walking multiple payments, one succeeds and a later one fails), the
+route stops immediately and the RSVP's records are updated to reflect
+only what was *actually* refunded, scaled proportionally — the database
+can never claim more was refunded than Square confirms.
 
 ### Member vs. non-member pricing
 

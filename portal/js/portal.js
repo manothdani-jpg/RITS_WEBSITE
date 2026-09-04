@@ -352,7 +352,8 @@
       "</div>" +
       '<div class="actions">' +
       (going
-        ? '<span class="guest-count-field">' + (rsvp.guest_count || 0) + " guest" + (rsvp.guest_count === 1 ? "" : "s") + "</span>" +
+        ? '<label class="guest-count-field">Guests <input type="number" min="0" max="20" value="' + (rsvp.guest_count || 0) + '" data-guest-input="' + ev.id + '"></label>' +
+          '<button class="btn btn-outline-dark btn-sm" data-update-rsvp="' + ev.id + '">Update</button>' +
           '<button class="btn btn-outline-dark btn-sm" data-cancel-rsvp="' + ev.id + '">Cancel RSVP</button>'
         : '<label class="guest-count-field">Guests <input type="number" min="0" max="20" value="0" data-guest-input="' + ev.id + '"></label>' +
           '<button class="btn btn-primary btn-sm" data-rsvp="' + ev.id + '">RSVP</button>') +
@@ -365,6 +366,25 @@
     var addonOptions = options.filter(function (o) { return o.kind === "addon"; });
 
     if (rsvp && rsvp.status === "registered") {
+      var mySelections = rsvp.selections || [];
+      var selectionsHtml = mySelections.length
+        ? '<div class="pricing-selections" style="width:100%; margin-top:.5rem;">' +
+          mySelections.map(function (s) {
+            var isAddon = s.kind === "addon";
+            return (
+              '<div class="pricing-choice" style="display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap;">' +
+              '<span>' + escapeHtml(s.label) + (s.quantity > 1 ? " ×" + s.quantity : "") + " — " + fmtMoney(s.amount_cents) + "</span>" +
+              (isAddon
+                ? '<span style="display:flex; align-items:center; gap:.4rem;">' +
+                  '<input type="number" min="0" max="' + (s.quantity - 1) + '" value="' + Math.max(0, s.quantity - 1) + '" class="addon-qty" data-reduce-qty-input="' + s.pricing_option_id + '" style="width:60px;">' +
+                  '<button type="button" class="btn btn-outline-dark btn-sm" data-reduce-selection="' + s.pricing_option_id + '" data-reduce-event="' + ev.id + '" data-reduce-label="' + escapeHtml(s.label) + '">Update</button>' +
+                  "</span>"
+                : "") +
+              "</div>"
+            );
+          }).join("") +
+          "</div>"
+        : "";
       var buyMoreHtml = addonOptions.length
         ? '<button type="button" class="btn btn-outline-dark btn-sm" data-toggle-buy-more="' + ev.id + '" style="margin-top:.5rem;">Buy More</button>' +
           '<div class="pricing-addons" data-buy-more-panel="' + ev.id + '" style="display:none; margin-top:.75rem; width:100%;">' +
@@ -388,6 +408,7 @@
         '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
         "</div>" +
         '<span class="badge badge-paid">Registered &middot; ' + fmtMoney(rsvp.amount_cents) + " paid</span>" +
+        selectionsHtml +
         buyMoreHtml +
         "</div>"
       );
@@ -499,11 +520,37 @@
   });
 
   document.getElementById("events-list").addEventListener("click", async function (e) {
-    var rsvpBtn = e.target.closest("[data-rsvp]");
+    var rsvpBtn = e.target.closest("[data-rsvp], [data-update-rsvp]");
     var cancelBtn = e.target.closest("[data-cancel-rsvp]");
     var registerBtn = e.target.closest("[data-register-pay]");
     var toggleBuyMoreBtn = e.target.closest("[data-toggle-buy-more]");
     var buyMoreSubmitBtn = e.target.closest("[data-buy-more-submit]");
+    var reduceBtn = e.target.closest("[data-reduce-selection]");
+
+    if (reduceBtn) {
+      var reduceOptId = reduceBtn.getAttribute("data-reduce-selection");
+      var reduceEvId = reduceBtn.getAttribute("data-reduce-event");
+      var reduceLabel = reduceBtn.getAttribute("data-reduce-label");
+      var reduceQtyInput = document.querySelector('[data-reduce-qty-input="' + reduceOptId + '"]');
+      var reduceQty = reduceQtyInput ? Math.max(0, parseInt(reduceQtyInput.value, 10) || 0) : 0;
+      var confirmMsg = reduceQty === 0
+        ? 'Remove "' + reduceLabel + '" entirely? Any amount already paid for it will be refunded to your original payment method.'
+        : 'Reduce "' + reduceLabel + '" to ' + reduceQty + '? The difference already paid will be refunded to your original payment method.';
+      if (!window.confirm(confirmMsg)) return;
+
+      reduceBtn.disabled = true;
+      reduceBtn.textContent = "Refunding…";
+      try {
+        var reduceResult = await api("/payments/event-selection", { method: "PUT", body: { event_id: reduceEvId, option_id: reduceOptId, quantity: reduceQty } });
+        toast(reduceResult.refunded_cents ? "Refunded " + fmtMoney(reduceResult.refunded_cents) : "Updated");
+        await loadProfile();
+      } catch (err) {
+        toast(err.message, true);
+        reduceBtn.disabled = false;
+        reduceBtn.textContent = "Update";
+      }
+      return;
+    }
 
     if (toggleBuyMoreBtn) {
       var panel = document.querySelector('[data-buy-more-panel="' + toggleBuyMoreBtn.getAttribute("data-toggle-buy-more") + '"]');
@@ -538,7 +585,8 @@
     }
 
     if (rsvpBtn) {
-      var eventId = rsvpBtn.getAttribute("data-rsvp");
+      var isUpdate = rsvpBtn.hasAttribute("data-update-rsvp");
+      var eventId = rsvpBtn.getAttribute(isUpdate ? "data-update-rsvp" : "data-rsvp");
       var guestInput = document.querySelector('[data-guest-input="' + eventId + '"]');
       var guestCount = guestInput ? parseInt(guestInput.value, 10) || 0 : 0;
       try {
@@ -555,7 +603,7 @@
         currentRsvps.push(enrichedRsvp);
         renderEvents();
         renderRsvpHistory();
-        toast("You're on the list!");
+        toast(isUpdate ? "Guest count updated" : "You're on the list!");
       } catch (err) {
         toast(err.message, true);
       }

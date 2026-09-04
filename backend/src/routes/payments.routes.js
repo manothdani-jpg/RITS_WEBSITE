@@ -1,8 +1,9 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
+const crypto = require("crypto");
 const db = require("../db");
 const { requireMember, requireAdmin } = require("../middleware/auth");
-const { createPaymentLink, WebhooksHelper } = require("../square");
+const { createPaymentLink, refundPayment, WebhooksHelper } = require("../square");
 
 const router = express.Router();
 
@@ -274,6 +275,120 @@ router.post("/event-addon-checkout", checkoutLimiter, requireMember, async (req,
   } catch (err) {
     console.error("Failed to create event add-on checkout:", err);
     res.status(502).json({ error: err.message || "Could not start checkout with Square." });
+  }
+});
+
+/* ============================================================
+   PUT /api/payments/event-selection — a member reduces or removes an
+   add-on they already paid for. Refunds the difference via Square
+   before touching any records, so the database can never show more
+   refunded than Square actually confirmed. To buy more, use
+   /event-addon-checkout instead — this endpoint only ever decreases.
+   ============================================================ */
+router.put("/event-selection", checkoutLimiter, requireMember, async (req, res) => {
+  const { event_id, option_id, quantity } = req.body || {};
+  if (!event_id || !option_id) return res.status(400).json({ error: "event_id and option_id are required" });
+  const newQuantity = parseInt(quantity, 10);
+  if (!Number.isInteger(newQuantity) || newQuantity < 0) {
+    return res.status(400).json({ error: "quantity must be a non-negative integer" });
+  }
+
+  try {
+    const rsvpResult = await db.query(
+      "SELECT id, status FROM rsvps WHERE member_id = $1 AND event_id = $2",
+      [req.member.sub, event_id]
+    );
+    const rsvp = rsvpResult.rows[0];
+    if (!rsvp || !["registered", "attended"].includes(rsvp.status)) {
+      return res.status(400).json({ error: "No active registration found for this event." });
+    }
+
+    const currentResult = await db.query(
+      `SELECT o.label, SUM(s.quantity)::int AS quantity, SUM(s.amount_cents)::int AS amount_cents
+       FROM rsvp_selections s JOIN event_pricing_options o ON o.id = s.pricing_option_id
+       WHERE s.rsvp_id = $1 AND s.pricing_option_id = $2
+       GROUP BY o.label`,
+      [rsvp.id, option_id]
+    );
+    const current = currentResult.rows[0];
+    if (!current || current.quantity === 0) {
+      return res.status(404).json({ error: "You don't have that item selected." });
+    }
+    if (newQuantity >= current.quantity) {
+      return res.status(400).json({ error: "That's not a reduction — use the add-on purchase option to buy more instead." });
+    }
+
+    const removedQuantity = current.quantity - newQuantity;
+    const refundCents = Math.round((removedQuantity / current.quantity) * current.amount_cents);
+
+    let actuallyRefunded = 0;
+    if (refundCents > 0) {
+      const eligiblePayments = await db.query(
+        `SELECT id, square_payment_id, amount_cents FROM payments
+         WHERE rsvp_id = $1 AND purpose = 'event' AND status = 'completed' AND square_payment_id IS NOT NULL
+         ORDER BY created_at DESC`,
+        [rsvp.id]
+      );
+
+      let remaining = refundCents;
+      for (const p of eligiblePayments.rows) {
+        if (remaining <= 0) break;
+        const chunk = Math.min(remaining, p.amount_cents);
+        try {
+          const { refundId } = await refundPayment({
+            paymentId: p.square_payment_id,
+            amountCents: chunk,
+            idempotencyKey: crypto.randomUUID(),
+            reason: `Reduced "${current.label}" from ${current.quantity} to ${newQuantity} for an event registration`,
+          });
+          await db.query(
+            `INSERT INTO payments (member_id, purpose, event_id, rsvp_id, amount_cents, status, square_payment_id, refund_of_payment_id)
+             VALUES ($1, 'event', $2, $3, $4, 'refunded', $5, $6)`,
+            [req.member.sub, event_id, rsvp.id, chunk, refundId, p.id]
+          );
+          remaining -= chunk;
+          actuallyRefunded += chunk;
+        } catch (err) {
+          console.error("Refund failed partway through:", err);
+          break; // stop here — never claim to have refunded more than Square confirmed
+        }
+      }
+
+      if (actuallyRefunded === 0) {
+        return res.status(502).json({ error: "Could not process the refund with Square. Please try again or contact the board." });
+      }
+    }
+
+    // Collapse this option's selection rows into one, reflecting only what was actually refunded.
+    // If Square only partially refunded (some chunk failed), scale the quantity removed down
+    // proportionally to what actually went through, rather than claiming the full reduction.
+    const actualRemovedQuantity = refundCents > 0
+      ? Math.round((actuallyRefunded / refundCents) * removedQuantity)
+      : 0;
+    const keptQuantity = current.quantity - actualRemovedQuantity;
+    const keptAmount = current.amount_cents - actuallyRefunded;
+
+    await db.query("DELETE FROM rsvp_selections WHERE rsvp_id = $1 AND pricing_option_id = $2", [rsvp.id, option_id]);
+    if (keptQuantity > 0) {
+      await db.query(
+        "INSERT INTO rsvp_selections (rsvp_id, pricing_option_id, quantity, amount_cents) VALUES ($1, $2, $3, $4)",
+        [rsvp.id, option_id, keptQuantity, keptAmount]
+      );
+    }
+    await db.query("UPDATE rsvps SET amount_cents = amount_cents - $1 WHERE id = $2", [actuallyRefunded, rsvp.id]);
+
+    const partial = actuallyRefunded < refundCents;
+    res.json({
+      refunded_cents: actuallyRefunded,
+      quantity: keptQuantity,
+      partial,
+      message: partial
+        ? "Refunded what Square would process; please retry to remove the rest."
+        : undefined,
+    });
+  } catch (err) {
+    console.error("Failed to reduce event selection:", err);
+    res.status(500).json({ error: "Could not update your selection." });
   }
 });
 

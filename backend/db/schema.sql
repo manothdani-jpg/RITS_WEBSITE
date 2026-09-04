@@ -193,15 +193,16 @@ CREATE TABLE IF NOT EXISTS payments (
   id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id               UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
   purpose                 TEXT NOT NULL DEFAULT 'membership' CHECK (purpose IN ('membership', 'event')),
-  tier                    TEXT CHECK (tier IN ('individual', 'family', 'lifetime', 'student')), -- set when purpose='membership'
+  tier                    TEXT, -- set when purpose='membership'; validated against membership_categories in the app layer
   event_id                UUID REFERENCES events(id) ON DELETE SET NULL, -- set when purpose='event'
   rsvp_id                 UUID REFERENCES rsvps(id) ON DELETE SET NULL,  -- set when purpose='event'
   amount_cents            INTEGER NOT NULL CHECK (amount_cents >= 0),
-  status                  TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled')),
+  status                  TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled', 'refunded')),
   square_order_id         TEXT,
   square_payment_link_id  TEXT,
   square_payment_id       TEXT,
   pending_selections      JSONB, -- add-on top-up picks, applied on webhook confirm (see payments.routes.js)
+  refund_of_payment_id    UUID REFERENCES payments(id) ON DELETE SET NULL, -- set on a status='refunded' row, pointing at the payment it refunded
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
