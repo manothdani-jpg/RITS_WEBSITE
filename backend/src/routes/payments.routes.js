@@ -80,6 +80,14 @@ router.post("/event-checkout", checkoutLimiter, requireMember, async (req, res) 
     const event = eventResult.rows[0];
     if (!event) return res.status(404).json({ error: "Event not found" });
 
+    const existingRsvp = await db.query(
+      "SELECT status FROM rsvps WHERE member_id = $1 AND event_id = $2",
+      [req.member.sub, event_id]
+    );
+    if (existingRsvp.rows[0] && ["registered", "attended"].includes(existingRsvp.rows[0].status)) {
+      return res.status(409).json({ error: "You're already registered for this event — use the add-on purchase option to buy more." });
+    }
+
     const memberResult = await db.query("SELECT payment_status FROM members WHERE id = $1", [req.member.sub]);
     const isActiveMember = memberResult.rows[0] && memberResult.rows[0].payment_status === "paid";
 
@@ -178,6 +186,98 @@ router.post("/event-checkout", checkoutLimiter, requireMember, async (req, res) 
 });
 
 /* ============================================================
+   POST /api/payments/event-addon-checkout — a member who's already
+   registered for a priced event buys additional add-ons (extra food,
+   etc.) on top of what they already paid for. Unlike /event-checkout,
+   this never touches the member's existing registration or selections
+   — the new picks are held on the payment row and only applied (added
+   to rsvps.amount_cents / inserted as rsvp_selections) once Square
+   confirms this specific payment. If it fails, nothing changes; the
+   original registration is untouched either way.
+   ============================================================ */
+router.post("/event-addon-checkout", checkoutLimiter, requireMember, async (req, res) => {
+  const { event_id, addons } = req.body || {};
+  if (!event_id) return res.status(400).json({ error: "event_id is required" });
+  if (!Array.isArray(addons) || !addons.length) return res.status(400).json({ error: "addons is required" });
+
+  try {
+    const eventResult = await db.query("SELECT id, name FROM events WHERE id = $1", [event_id]);
+    const event = eventResult.rows[0];
+    if (!event) return res.status(404).json({ error: "Event not found" });
+
+    const rsvpResult = await db.query(
+      "SELECT id, status FROM rsvps WHERE member_id = $1 AND event_id = $2",
+      [req.member.sub, event_id]
+    );
+    const rsvp = rsvpResult.rows[0];
+    if (!rsvp || !["registered", "attended"].includes(rsvp.status)) {
+      return res.status(400).json({ error: "Register for this event first before buying add-ons." });
+    }
+
+    const memberResult = await db.query("SELECT payment_status FROM members WHERE id = $1", [req.member.sub]);
+    const isActiveMember = memberResult.rows[0] && memberResult.rows[0].payment_status === "paid";
+    const priceQualifier = isActiveMember ? "" : " (non-member price)";
+
+    const optionsResult = await db.query(
+      "SELECT id, kind, label, member_amount_cents, non_member_amount_cents FROM event_pricing_options WHERE event_id = $1 AND kind = 'addon'",
+      [event_id]
+    );
+    const optionsById = new Map(optionsResult.rows.map((o) => [o.id, o]));
+    const priceFor = (opt) => (isActiveMember ? opt.member_amount_cents : opt.non_member_amount_cents);
+
+    const pendingSelections = [];
+    const lineItems = [];
+    let amountCents = 0;
+
+    for (const addon of addons) {
+      const opt = optionsById.get(addon.option_id);
+      if (!opt) return res.status(400).json({ error: "Invalid add-on selected." });
+      const qty = Math.max(1, parseInt(addon.quantity, 10) || 1);
+      const unitCents = priceFor(opt);
+      pendingSelections.push({ pricing_option_id: opt.id, quantity: qty, amount_cents: unitCents * qty });
+      amountCents += unitCents * qty;
+      lineItems.push({ name: `${event.name} — ${opt.label}${priceQualifier}`, quantity: qty, amountCents: unitCents });
+    }
+
+    if (amountCents === 0) {
+      for (const s of pendingSelections) {
+        await db.query(
+          "INSERT INTO rsvp_selections (rsvp_id, pricing_option_id, quantity, amount_cents) VALUES ($1, $2, $3, $4)",
+          [rsvp.id, s.pricing_option_id, s.quantity, s.amount_cents]
+        );
+      }
+      return res.status(201).json({ rsvp_id: rsvp.id, amount_cents: 0, free: true });
+    }
+
+    const paymentRow = await db.query(
+      `INSERT INTO payments (member_id, purpose, event_id, rsvp_id, amount_cents, status, pending_selections)
+       VALUES ($1, 'event', $2, $3, $4, 'pending', $5) RETURNING id`,
+      [req.member.sub, event_id, rsvp.id, amountCents, JSON.stringify(pendingSelections)]
+    );
+    const paymentId = paymentRow.rows[0].id;
+
+    const portalUrl = process.env.PORTAL_URL || "http://localhost:8420/portal";
+    const redirectUrl = `${portalUrl}/payment-complete.html?payment_id=${paymentId}`;
+
+    const { checkoutUrl, squareOrderId, paymentLinkId } = await createPaymentLink({
+      referenceId: paymentId,
+      lineItems,
+      redirectUrl,
+    });
+
+    await db.query(
+      "UPDATE payments SET square_order_id = $1, square_payment_link_id = $2 WHERE id = $3",
+      [squareOrderId, paymentLinkId, paymentId]
+    );
+
+    res.json({ checkout_url: checkoutUrl, payment_id: paymentId, rsvp_id: rsvp.id, amount_cents: amountCents });
+  } catch (err) {
+    console.error("Failed to create event add-on checkout:", err);
+    res.status(502).json({ error: err.message || "Could not start checkout with Square." });
+  }
+});
+
+/* ============================================================
    GET /api/payments/me — the logged-in member's payment history.
    ============================================================ */
 router.get("/me", requireMember, async (req, res) => {
@@ -246,7 +346,7 @@ router.post("/webhook", async (req, res) => {
 
 async function handlePaymentUpdate(squarePayment) {
   const { rows } = await db.query(
-    "SELECT id, member_id, purpose, rsvp_id, status FROM payments WHERE square_order_id = $1",
+    "SELECT id, member_id, purpose, rsvp_id, status, amount_cents, pending_selections FROM payments WHERE square_order_id = $1",
     [squarePayment.order_id]
   );
   const paymentRow = rows[0];
@@ -256,13 +356,29 @@ async function handlePaymentUpdate(squarePayment) {
   }
   if (paymentRow.status === "completed") return; // already processed — idempotent
 
+  // An add-on top-up payment (event-addon-checkout) never touches the
+  // member's existing registration — it carries its own selections to
+  // apply on success, and is simply left failed/cancelled on failure.
+  const isAddonTopUp = paymentRow.purpose === "event" && !!paymentRow.pending_selections;
+
   if (squarePayment.status === "COMPLETED") {
     await db.query(
       "UPDATE payments SET status = 'completed', square_payment_id = $1 WHERE id = $2",
       [squarePayment.id, paymentRow.id]
     );
 
-    if (paymentRow.purpose === "event") {
+    if (isAddonTopUp) {
+      for (const s of paymentRow.pending_selections) {
+        await db.query(
+          "INSERT INTO rsvp_selections (rsvp_id, pricing_option_id, quantity, amount_cents) VALUES ($1, $2, $3, $4)",
+          [paymentRow.rsvp_id, s.pricing_option_id, s.quantity, s.amount_cents]
+        );
+      }
+      await db.query(
+        "UPDATE rsvps SET amount_cents = amount_cents + $1 WHERE id = $2",
+        [paymentRow.amount_cents, paymentRow.rsvp_id]
+      );
+    } else if (paymentRow.purpose === "event") {
       if (paymentRow.rsvp_id) {
         await db.query("UPDATE rsvps SET status = 'registered' WHERE id = $1", [paymentRow.rsvp_id]);
       }
@@ -279,7 +395,7 @@ async function handlePaymentUpdate(squarePayment) {
       "UPDATE payments SET status = $1, square_payment_id = $2 WHERE id = $3",
       [squarePayment.status === "CANCELED" ? "cancelled" : "failed", squarePayment.id, paymentRow.id]
     );
-    if (paymentRow.purpose === "event" && paymentRow.rsvp_id) {
+    if (!isAddonTopUp && paymentRow.purpose === "event" && paymentRow.rsvp_id) {
       await db.query("UPDATE rsvps SET status = 'cancelled' WHERE id = $1", [paymentRow.rsvp_id]);
     }
   }

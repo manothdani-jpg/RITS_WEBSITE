@@ -136,6 +136,8 @@ psql "$DATABASE_URL" -f db/migrations/011_rsvp_member_snapshot.sql
 psql "$DATABASE_URL" -f db/migrations/012_rsvp_selection_amounts.sql
 psql "$DATABASE_URL" -f db/migrations/013_membership_categories.sql
 psql "$DATABASE_URL" -f db/migrations/014_board_profiles.sql
+psql "$DATABASE_URL" -f db/migrations/015_family_member_details.sql
+psql "$DATABASE_URL" -f db/migrations/016_event_addon_topup.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -272,6 +274,7 @@ dashboard) to point at the real API URL.
 | PUT | `/api/events/pricing/:optionId` | admin/board | Edit a pricing option |
 | DELETE | `/api/events/pricing/:optionId` | admin/board | Remove a pricing option |
 | POST | `/api/payments/event-checkout` | member (rate-limited) | Register for a priced event and pay via Square (or register free if the total is $0) |
+| POST | `/api/payments/event-addon-checkout` | member (rate-limited) | Buy more add-ons for an event you're already registered for, without re-charging for what you already paid |
 | POST | `/api/volunteers` | — (rate-limited) | Public: submit a volunteer signup |
 | GET | `/api/volunteers` | admin/board | List all volunteer signups |
 | PUT | `/api/volunteers/:id` | admin/board | Update a volunteer's status |
@@ -316,7 +319,10 @@ are not interchangeable — each only works against its own set of routes.
   (membership/event), amount, `status` (pending/completed/failed/cancelled),
   and the Square order/payment-link/payment IDs used to match incoming
   webhooks back to this row. `tier` is set for membership payments;
-  `event_id`/`rsvp_id` are set for event payments.
+  `event_id`/`rsvp_id` are set for event payments. `pending_selections`
+  is set only for an add-on top-up payment (see "Buying more add-ons"
+  above) — its presence is how `handlePaymentUpdate` tells a top-up
+  apart from the original registration payment.
 - `site_content` — generic `key`/`value` rows for editable homepage text
   (e.g. `hero.heading`, `about.mission`, `contact.email`) — see "Homepage"
   above.
@@ -425,6 +431,32 @@ Relevant tables: `event_pricing_options` (the admin-defined choices),
 `rsvps.status` (the computed total and payment state), and `payments.purpose`
 / `payments.event_id` / `payments.rsvp_id` (generalized from
 membership-only to also cover event charges).
+
+### Buying more add-ons after registering
+
+Once registered (`rsvps.status = 'registered'`), the portal shows a "Buy
+More" button under that event if it has any add-on options — expands a
+mini form (add-ons only, no participation choice) with its own running
+total and a "Purchase" button, calling `POST
+/api/payments/event-addon-checkout`. `POST /api/payments/event-checkout`
+itself now refuses (409) to run again once an RSVP is already
+`registered`/`attended`, specifically to force top-ups through this path
+instead of silently re-running the original checkout (which would
+overwrite `rsvp_selections` and re-charge for everything, not just what's
+new).
+
+The tricky part is not corrupting an already-confirmed registration if the
+top-up payment fails. `event-addon-checkout` never touches
+`rsvps.amount_cents` or inserts `rsvp_selections` at checkout time — it
+stashes the picks on `payments.pending_selections` (JSONB) and only
+applies them (insert the selections, `amount_cents = amount_cents +
+<this payment's amount>`) from `handlePaymentUpdate` once Square confirms
+that specific payment. `rsvps.status` is never touched by a top-up either
+way — a failed top-up just leaves that one `payments` row `failed`, with
+the member's original registration exactly as it was. This is different
+from the original registration payment, which still cancels the whole
+RSVP on failure (that payment has no `pending_selections`, which is how
+`handlePaymentUpdate` tells the two cases apart).
 
 ### Member vs. non-member pricing
 

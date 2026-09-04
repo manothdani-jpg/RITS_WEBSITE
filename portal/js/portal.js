@@ -365,13 +365,30 @@
     var addonOptions = options.filter(function (o) { return o.kind === "addon"; });
 
     if (rsvp && rsvp.status === "registered") {
+      var buyMoreHtml = addonOptions.length
+        ? '<button type="button" class="btn btn-outline-dark btn-sm" data-toggle-buy-more="' + ev.id + '" style="margin-top:.5rem;">Buy More</button>' +
+          '<div class="pricing-addons" data-buy-more-panel="' + ev.id + '" style="display:none; margin-top:.75rem; width:100%;">' +
+          addonOptions.map(function (o) {
+            return (
+              '<label class="pricing-choice">' +
+              '<input type="checkbox" data-bm-addon-check="' + o.id + '" data-bm-addon-event="' + ev.id + '"> ' +
+              escapeHtml(o.label) + " — " + fmtMoney(priceFor(o)) + " each " +
+              '<input type="number" min="1" max="20" value="1" class="addon-qty" data-bm-addon-qty="' + o.id + '" disabled>' +
+              "</label>"
+            );
+          }).join("") +
+          '<div class="pricing-total">Total: <strong data-bm-total="' + ev.id + '">' + fmtMoney(0) + "</strong></div>" +
+          '<button type="button" class="btn btn-primary btn-sm" data-buy-more-submit="' + ev.id + '" style="margin-top:.5rem;">Purchase</button>' +
+          "</div>"
+        : "";
       return (
-        '<div class="event-row">' +
+        '<div class="event-row" style="flex-wrap:wrap;">' +
         "<div>" +
         "<h3>" + escapeHtml(ev.name) + "</h3>" +
         '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
         "</div>" +
         '<span class="badge badge-paid">Registered &middot; ' + fmtMoney(rsvp.amount_cents) + " paid</span>" +
+        buyMoreHtml +
         "</div>"
       );
     }
@@ -445,7 +462,33 @@
     if (totalEl) totalEl.textContent = fmtMoney(total);
   }
 
+  function computeBuyMoreTotal(eventId) {
+    var options = pricingByEvent[eventId] || [];
+    var optionsById = {};
+    options.forEach(function (o) { optionsById[o.id] = o; });
+    var total = 0;
+    document.querySelectorAll('[data-bm-addon-check][data-bm-addon-event="' + eventId + '"]:checked').forEach(function (cb) {
+      var optId = cb.getAttribute("data-bm-addon-check");
+      var qtyInput = document.querySelector('[data-bm-addon-qty="' + optId + '"]');
+      var qty = qtyInput ? Math.max(1, parseInt(qtyInput.value, 10) || 1) : 1;
+      total += priceFor(optionsById[optId]) * qty;
+    });
+    var totalEl = document.querySelector('[data-bm-total="' + eventId + '"]');
+    if (totalEl) totalEl.textContent = fmtMoney(total);
+  }
+
   document.getElementById("events-list").addEventListener("change", function (e) {
+    if (e.target.matches("[data-bm-addon-check]")) {
+      var bmQtyInput = document.querySelector('[data-bm-addon-qty="' + e.target.getAttribute("data-bm-addon-check") + '"]');
+      if (bmQtyInput) bmQtyInput.disabled = !e.target.checked;
+      computeBuyMoreTotal(e.target.getAttribute("data-bm-addon-event"));
+      return;
+    }
+    if (e.target.matches("[data-bm-addon-qty]")) {
+      var bmEventId = e.target.closest("[data-buy-more-panel]");
+      if (bmEventId) computeBuyMoreTotal(bmEventId.getAttribute("data-buy-more-panel"));
+      return;
+    }
     var eventId = e.target.getAttribute("data-price-event");
     if (!eventId) return;
     if (e.target.matches("[data-addon-check]")) {
@@ -459,6 +502,40 @@
     var rsvpBtn = e.target.closest("[data-rsvp]");
     var cancelBtn = e.target.closest("[data-cancel-rsvp]");
     var registerBtn = e.target.closest("[data-register-pay]");
+    var toggleBuyMoreBtn = e.target.closest("[data-toggle-buy-more]");
+    var buyMoreSubmitBtn = e.target.closest("[data-buy-more-submit]");
+
+    if (toggleBuyMoreBtn) {
+      var panel = document.querySelector('[data-buy-more-panel="' + toggleBuyMoreBtn.getAttribute("data-toggle-buy-more") + '"]');
+      if (panel) panel.style.display = panel.style.display === "none" ? "" : "none";
+    }
+
+    if (buyMoreSubmitBtn) {
+      var bmEvId = buyMoreSubmitBtn.getAttribute("data-buy-more-submit");
+      var bmAddons = [];
+      document.querySelectorAll('[data-bm-addon-check][data-bm-addon-event="' + bmEvId + '"]:checked').forEach(function (cb) {
+        var optId = cb.getAttribute("data-bm-addon-check");
+        var qtyInput = document.querySelector('[data-bm-addon-qty="' + optId + '"]');
+        bmAddons.push({ option_id: optId, quantity: qtyInput ? Math.max(1, parseInt(qtyInput.value, 10) || 1) : 1 });
+      });
+      if (!bmAddons.length) { toast("Pick at least one add-on first.", true); return; }
+
+      buyMoreSubmitBtn.disabled = true;
+      buyMoreSubmitBtn.textContent = "Redirecting…";
+      try {
+        var bmResult = await api("/payments/event-addon-checkout", { method: "POST", body: { event_id: bmEvId, addons: bmAddons } });
+        if (bmResult.free) {
+          toast("Added!");
+          renderEvents();
+        } else {
+          window.location.href = bmResult.checkout_url;
+        }
+      } catch (err) {
+        toast(err.message, true);
+        buyMoreSubmitBtn.disabled = false;
+        buyMoreSubmitBtn.textContent = "Purchase";
+      }
+    }
 
     if (rsvpBtn) {
       var eventId = rsvpBtn.getAttribute("data-rsvp");

@@ -201,6 +201,7 @@ CREATE TABLE IF NOT EXISTS payments (
   square_order_id         TEXT,
   square_payment_link_id  TEXT,
   square_payment_id       TEXT,
+  pending_selections      JSONB, -- add-on top-up picks, applied on webhook confirm (see payments.routes.js)
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
