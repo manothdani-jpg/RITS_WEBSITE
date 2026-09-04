@@ -489,16 +489,21 @@
 
       <div id="family-section" style="display:none;">
         <div class="section-title">Family Members</div>
-        <div class="pill-list" id="family-pills"></div>
-        <div style="display:flex; gap:.5rem; margin-top:.75rem;">
-          <input id="new-family-name" placeholder="Name" style="flex:1; border:1.5px solid color-mix(in srgb, var(--rule) 35%, transparent); border-radius:var(--radius-sm); padding:.55em .7em;">
-          <select id="new-family-relationship" style="border:1.5px solid color-mix(in srgb, var(--rule) 35%, transparent); border-radius:var(--radius-sm); padding:.55em .5em;">
+        <div id="family-pills"></div>
+        <div class="add-family-row" style="margin-top:.75rem;">
+          <input id="new-family-name" placeholder="Name">
+          <select id="new-family-relationship">
             <option value="spouse">Spouse</option>
             <option value="child" selected>Child</option>
             <option value="parent">Parent</option>
             <option value="other">Other</option>
           </select>
+          <input id="new-family-email" type="email" placeholder="Email (optional)">
+          <input id="new-family-address" placeholder="Address (optional)">
+          <input id="new-family-city" placeholder="City">
+          <input id="new-family-zip" placeholder="ZIP" style="max-width:90px;">
           <button type="button" class="btn btn-outline-dark btn-sm" id="add-family-btn">Add</button>
+          <button type="button" class="btn btn-outline-dark btn-sm" id="cancel-family-edit-btn" style="display:none;">Cancel</button>
         </div>
       </div>
 

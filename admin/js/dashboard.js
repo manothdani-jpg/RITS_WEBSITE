@@ -210,6 +210,7 @@
     document.getElementById("family-section").style.display = id ? "" : "none";
     document.getElementById("rsvp-section").style.display = id ? "" : "none";
     currentFamily = [];
+    resetFamilyForm();
 
     if (id) {
       document.getElementById("member-modal-title").textContent = "Edit Member";
@@ -242,14 +243,37 @@
     memberModal.classList.add("is-open");
   }
 
+  var editingFamilyId = null;
+
   function renderFamilyPills() {
     document.getElementById("family-pills").innerHTML = currentFamily.map(function (f) {
+      var detail = [f.email, [f.address_line1, f.city, f.zip].filter(Boolean).join(", ")].filter(Boolean).join(" &middot; ");
       return (
-        '<span class="pill">' + escapeHtml(f.first_name) + " (" + escapeHtml(f.relationship) + ')' +
+        '<div class="family-member-row">' +
+        '<div class="fm-info">' +
+        '<div class="fm-name">' + escapeHtml(f.first_name) + " (" + escapeHtml(f.relationship) + ")</div>" +
+        (detail ? '<div class="fm-detail">' + detail + "</div>" : "") +
+        "</div>" +
+        '<div class="fm-actions">' +
+        '<button type="button" data-edit-family="' + f.id + '" aria-label="Edit ' + escapeHtml(f.first_name) + '">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
         '<button type="button" data-remove-family="' + f.id + '" aria-label="Remove ' + escapeHtml(f.first_name) + '">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></span>'
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+        "</div></div>"
       );
     }).join("") || '<span style="color:var(--text-soft); font-size:.85rem;">No family members added yet.</span>';
+  }
+
+  function resetFamilyForm() {
+    editingFamilyId = null;
+    document.getElementById("new-family-name").value = "";
+    document.getElementById("new-family-relationship").value = "child";
+    document.getElementById("new-family-email").value = "";
+    document.getElementById("new-family-address").value = "";
+    document.getElementById("new-family-city").value = "";
+    document.getElementById("new-family-zip").value = "";
+    document.getElementById("add-family-btn").textContent = "Add";
+    document.getElementById("cancel-family-edit-btn").style.display = "none";
   }
 
   function renderRsvpList(rsvps) {
@@ -266,27 +290,60 @@
   document.getElementById("add-family-btn").addEventListener("click", async function () {
     var id = document.getElementById("member-id").value;
     var name = document.getElementById("new-family-name").value.trim();
-    var relationship = document.getElementById("new-family-relationship").value;
     if (!id) { toast("Save the member first, then add family members.", true); return; }
     if (!name) return;
+    var payload = {
+      first_name: name,
+      relationship: document.getElementById("new-family-relationship").value,
+      email: document.getElementById("new-family-email").value.trim() || null,
+      address_line1: document.getElementById("new-family-address").value.trim() || null,
+      city: document.getElementById("new-family-city").value.trim() || null,
+      zip: document.getElementById("new-family-zip").value.trim() || null,
+    };
     try {
-      var data = await api("/members/" + id + "/family", { method: "POST", body: { first_name: name, relationship: relationship } });
-      currentFamily.push(data.family_member);
+      if (editingFamilyId) {
+        var updated = await api("/members/" + id + "/family/" + editingFamilyId, { method: "PUT", body: payload });
+        currentFamily = currentFamily.map(function (f) { return f.id === editingFamilyId ? updated.family_member : f; });
+      } else {
+        var data = await api("/members/" + id + "/family", { method: "POST", body: payload });
+        currentFamily.push(data.family_member);
+      }
       renderFamilyPills();
-      document.getElementById("new-family-name").value = "";
+      resetFamilyForm();
     } catch (err) {
       toast(err.message, true);
     }
   });
 
+  document.getElementById("cancel-family-edit-btn").addEventListener("click", resetFamilyForm);
+
   document.getElementById("family-pills").addEventListener("click", async function (e) {
-    var btn = e.target.closest("[data-remove-family]");
-    if (!btn) return;
-    var familyId = btn.getAttribute("data-remove-family");
+    var editBtn = e.target.closest("[data-edit-family]");
+    var removeBtn = e.target.closest("[data-remove-family]");
+
+    if (editBtn) {
+      var familyId = editBtn.getAttribute("data-edit-family");
+      var f = currentFamily.find(function (x) { return x.id === familyId; });
+      if (!f) return;
+      editingFamilyId = familyId;
+      document.getElementById("new-family-name").value = f.first_name || "";
+      document.getElementById("new-family-relationship").value = f.relationship || "child";
+      document.getElementById("new-family-email").value = f.email || "";
+      document.getElementById("new-family-address").value = f.address_line1 || "";
+      document.getElementById("new-family-city").value = f.city || "";
+      document.getElementById("new-family-zip").value = f.zip || "";
+      document.getElementById("add-family-btn").textContent = "Save";
+      document.getElementById("cancel-family-edit-btn").style.display = "";
+      return;
+    }
+
+    if (!removeBtn) return;
+    var removeId = removeBtn.getAttribute("data-remove-family");
     var memberId = document.getElementById("member-id").value;
     try {
-      await api("/members/" + memberId + "/family/" + familyId, { method: "DELETE" });
-      currentFamily = currentFamily.filter(function (f) { return f.id !== familyId; });
+      await api("/members/" + memberId + "/family/" + removeId, { method: "DELETE" });
+      currentFamily = currentFamily.filter(function (f) { return f.id !== removeId; });
+      if (editingFamilyId === removeId) resetFamilyForm();
       renderFamilyPills();
     } catch (err) {
       toast(err.message, true);

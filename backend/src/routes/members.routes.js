@@ -161,15 +161,37 @@ router.put("/me", requireMember, async (req, res) => {
 });
 
 router.post("/me/family", requireMember, async (req, res) => {
-  const { first_name, last_name, relationship, date_of_birth } = req.body || {};
+  const { first_name, last_name, relationship, date_of_birth, email, address_line1, city, zip } = req.body || {};
   if (!first_name) return res.status(400).json({ error: "first_name is required" });
+  if (email && !EMAIL_RE.test(email)) return res.status(400).json({ error: "a valid email is required" });
 
   const { rows } = await db.query(
-    `INSERT INTO family_members (member_id, first_name, last_name, relationship, date_of_birth)
-     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [req.member.sub, first_name, last_name || null, relationship || "child", date_of_birth || null]
+    `INSERT INTO family_members (member_id, first_name, last_name, relationship, date_of_birth, email, address_line1, city, zip)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [req.member.sub, first_name, last_name || null, relationship || "child", date_of_birth || null, email || null, address_line1 || null, city || null, zip || null]
   );
   res.status(201).json({ family_member: rows[0] });
+});
+
+router.put("/me/family/:familyId", requireMember, async (req, res) => {
+  const { first_name, last_name, relationship, date_of_birth, email, address_line1, city, zip } = req.body || {};
+  if (email && !EMAIL_RE.test(email)) return res.status(400).json({ error: "a valid email is required" });
+
+  const { rows } = await db.query(
+    `UPDATE family_members SET
+       first_name = COALESCE($1, first_name),
+       last_name = $2,
+       relationship = COALESCE($3, relationship),
+       date_of_birth = $4,
+       email = $5,
+       address_line1 = $6,
+       city = $7,
+       zip = $8
+     WHERE id = $9 AND member_id = $10 RETURNING *`,
+    [first_name, last_name || null, relationship, date_of_birth || null, email || null, address_line1 || null, city || null, zip || null, req.params.familyId, req.member.sub]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Family member not found" });
+  res.json({ family_member: rows[0] });
 });
 
 router.delete("/me/family/:familyId", requireMember, async (req, res) => {
@@ -322,14 +344,15 @@ router.delete("/:id", async (req, res) => {
 
 // POST /api/members/:id/family
 router.post("/:id/family", async (req, res) => {
-  const { first_name, last_name, relationship, date_of_birth } = req.body || {};
+  const { first_name, last_name, relationship, date_of_birth, email, address_line1, city, zip } = req.body || {};
   if (!first_name) return res.status(400).json({ error: "first_name is required" });
+  if (email && !EMAIL_RE.test(email)) return res.status(400).json({ error: "a valid email is required" });
 
   try {
     const { rows } = await db.query(
-      `INSERT INTO family_members (member_id, first_name, last_name, relationship, date_of_birth)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [req.params.id, first_name, last_name || null, relationship || "child", date_of_birth || null]
+      `INSERT INTO family_members (member_id, first_name, last_name, relationship, date_of_birth, email, address_line1, city, zip)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [req.params.id, first_name, last_name || null, relationship || "child", date_of_birth || null, email || null, address_line1 || null, city || null, zip || null]
     );
     res.status(201).json({ family_member: rows[0] });
   } catch (err) {
@@ -339,6 +362,28 @@ router.post("/:id/family", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Could not add family member" });
   }
+});
+
+// PUT /api/members/:id/family/:familyId
+router.put("/:id/family/:familyId", async (req, res) => {
+  const { first_name, last_name, relationship, date_of_birth, email, address_line1, city, zip } = req.body || {};
+  if (email && !EMAIL_RE.test(email)) return res.status(400).json({ error: "a valid email is required" });
+
+  const { rows } = await db.query(
+    `UPDATE family_members SET
+       first_name = COALESCE($1, first_name),
+       last_name = $2,
+       relationship = COALESCE($3, relationship),
+       date_of_birth = $4,
+       email = $5,
+       address_line1 = $6,
+       city = $7,
+       zip = $8
+     WHERE id = $9 AND member_id = $10 RETURNING *`,
+    [first_name, last_name || null, relationship, date_of_birth || null, email || null, address_line1 || null, city || null, zip || null, req.params.familyId, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Family member not found" });
+  res.json({ family_member: rows[0] });
 });
 
 // DELETE /api/members/:id/family/:familyId

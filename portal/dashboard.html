@@ -58,7 +58,7 @@
   <section class="portal-card">
     <h2>Family Members</h2>
     <p class="hint">Household members linked to your membership.</p>
-    <div class="pill-list" id="family-pills"></div>
+    <div id="family-pills"></div>
     <div class="add-family-row">
       <input id="new-family-name" placeholder="Name">
       <select id="new-family-relationship">
@@ -67,7 +67,12 @@
         <option value="parent">Parent</option>
         <option value="other">Other</option>
       </select>
+      <input id="new-family-email" type="email" placeholder="Email (optional)">
+      <input id="new-family-address" placeholder="Address (optional)">
+      <input id="new-family-city" placeholder="City">
+      <input id="new-family-zip" placeholder="ZIP" style="max-width:90px;">
       <button type="button" class="btn btn-outline-dark btn-sm" id="add-family-btn">Add</button>
+      <button type="button" class="btn btn-outline-dark btn-sm" id="cancel-family-edit-btn" style="display:none;">Cancel</button>
     </div>
   </section>
 

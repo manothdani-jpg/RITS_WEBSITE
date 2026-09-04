@@ -132,6 +132,18 @@ tbody tr:hover{ background:color-mix(in srgb, var(--cream) 60%, transparent); cu
   padding:.55em .7em; font-family:inherit; font-size:.88rem; min-width:140px;
 }
 
+.family-member-row{
+  display:flex; align-items:center; justify-content:space-between; gap:.75rem;
+  padding:.6rem .75rem; border-radius:var(--radius-sm); background:var(--cream);
+  margin-bottom:.5rem; font-size:.88rem;
+}
+.family-member-row .fm-info{ flex-grow:1; min-width:0; }
+.family-member-row .fm-name{ font-weight:600; }
+.family-member-row .fm-detail{ color:var(--text-soft); font-size:.8rem; margin-top:.15rem; }
+.family-member-row .fm-actions{ display:flex; gap:.5rem; flex-shrink:0; }
+.family-member-row .fm-actions button{ background:none; border:none; cursor:pointer; color:var(--text-soft); display:flex; }
+.family-member-row .fm-actions button svg{ width:15px; height:15px; }
+
 .media-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:1rem; }
 .media-item{
   position:relative; border-radius:var(--radius-sm); overflow:hidden; border:1px solid color-mix(in srgb, var(--rule) 18%, transparent);

@@ -61,6 +61,10 @@ CREATE TABLE IF NOT EXISTS family_members (
   relationship  TEXT NOT NULL DEFAULT 'child'
                   CHECK (relationship IN ('spouse', 'child', 'parent', 'other')),
   date_of_birth DATE,
+  email         TEXT,
+  address_line1 TEXT,
+  city          TEXT,
+  zip           TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
