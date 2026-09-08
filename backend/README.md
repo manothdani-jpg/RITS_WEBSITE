@@ -49,8 +49,10 @@ except admin-account management (`../admin/` → "Admin Logins" tab and
   headline/motto/subheading, hero stats (member families, events/year,
   founded year), mission statement, the three "about" bullets, the title
   + description of each of the four "Pillars of RITS" cards, the
-  membership/sponsorship notes on the Get Involved cards, and contact
-  info — all shown live on `../index.html`. Backed by a generic
+  membership/sponsorship notes on the Get Involved cards, contact info,
+  and the Facebook/Instagram/YouTube URLs behind the social icons in
+  "Get in touch" (empty by default — those icons link to `#` until set)
+  — all shown live on `../index.html`. Backed by a generic
   `site_content` key/value table (see Data model), so the editable set can
   grow by adding a new key + a form field, no schema change needed (the
   pillars were added exactly this way — 8 new keys, 8 new form fields,
@@ -59,7 +61,11 @@ except admin-account management (`../admin/` → "Admin Logins" tab and
   this — it's wired directly to whichever event has the soonest
   `event_date` in the Events tab, so it updates itself automatically.
   The pillar icons themselves (and the fixed count of four) aren't
-  editable — only each pillar's title and description text.
+  editable — only each pillar's title and description text. The social
+  icons use a second flavor of the same mechanism —
+  `data-content-href="key"` instead of `data-content="key"` — since a
+  URL needs to become an `href` attribute, not element text;
+  `js/main.js`'s `loadSiteContent()` handles both.
 - **Communications** (`../admin/` → "Communications", both roles) — compose
   a subject/body and email it to members, optionally filtered by
   membership tier and/or payment status. `{{first_name}}` in the body is
@@ -146,6 +152,7 @@ psql "$DATABASE_URL" -f db/migrations/016_event_addon_topup.sql
 psql "$DATABASE_URL" -f db/migrations/017_event_selection_refunds.sql
 psql "$DATABASE_URL" -f db/migrations/018_event_flyers.sql
 psql "$DATABASE_URL" -f db/migrations/019_pillar_content.sql
+psql "$DATABASE_URL" -f db/migrations/020_social_links.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed

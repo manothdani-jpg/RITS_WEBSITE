@@ -883,6 +883,9 @@
     "hc-contact-email": "contact.email",
     "hc-contact-phone": "contact.phone",
     "hc-contact-location": "contact.location",
+    "hc-facebook-url": "contact.facebook_url",
+    "hc-instagram-url": "contact.instagram_url",
+    "hc-youtube-url": "contact.youtube_url",
   };
   var homepageForm = document.getElementById("homepage-form");
 

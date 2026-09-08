@@ -114,6 +114,11 @@
         el.textContent = value;
         el.classList.toggle("ph", isPlaceholder);
       });
+      document.querySelectorAll("[data-content-href]").forEach(function (el) {
+        var key = el.getAttribute("data-content-href");
+        var value = data.content[key];
+        if (value) el.href = value;
+      });
     } catch (err) {
       // Network hiccup or backend not running — the page's hardcoded
       // fallback text (already in the HTML) stays visible. Not fatal.

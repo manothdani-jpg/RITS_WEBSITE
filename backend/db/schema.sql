@@ -256,7 +256,10 @@ INSERT INTO site_content (key, value) VALUES
   ('pillars.3_title', 'Community & Fellowship'),
   ('pillars.3_description', 'Regular gatherings that connect Tamil families across Rhode Island and build lasting friendships.'),
   ('pillars.4_title', 'Youth & Education'),
-  ('pillars.4_description', 'Scholarships, mentorship, and a youth wing that gives the next generation ownership of RITS''s future.')
+  ('pillars.4_description', 'Scholarships, mentorship, and a youth wing that gives the next generation ownership of RITS''s future.'),
+  ('contact.facebook_url', ''),
+  ('contact.instagram_url', ''),
+  ('contact.youtube_url', '')
 ON CONFLICT (key) DO NOTHING;
 
 -- ---------------------------------------------------------------
