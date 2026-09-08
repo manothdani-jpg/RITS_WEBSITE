@@ -263,7 +263,12 @@
         var inner = s.website_url
           ? '<a href="' + escapeHtmlLite(s.website_url) + '" target="_blank" rel="noopener">' + img + "</a>"
           : img;
-        return '<div class="sponsor-box sponsor-logo">' + inner + "</div>";
+        var nameHtml = s.name
+          ? (s.website_url
+              ? '<a class="sponsor-name" href="' + escapeHtmlLite(s.website_url) + '" target="_blank" rel="noopener">' + escapeHtmlLite(s.name) + "</a>"
+              : '<span class="sponsor-name">' + escapeHtmlLite(s.name) + "</span>")
+          : "";
+        return '<div class="sponsor-item"><div class="sponsor-box sponsor-logo">' + inner + "</div>" + nameHtml + "</div>";
       }).join("");
     } catch (err) {
       // Backend not running — keep the placeholder boxes already in the HTML.
