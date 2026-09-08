@@ -888,8 +888,13 @@
     "hc-youtube-url": "contact.youtube_url",
   };
   var homepageForm = document.getElementById("homepage-form");
+  var homepageSaveBtn = homepageForm.querySelector('button[type="submit"]');
+  var homepageContentLoaded = false;
 
   async function loadHomepageContent() {
+    homepageContentLoaded = false;
+    homepageSaveBtn.disabled = true;
+    homepageSaveBtn.textContent = "Loading current content…";
     try {
       var data = await api("/site-content");
       Object.keys(HOMEPAGE_FIELD_MAP).forEach(function (fieldId) {
@@ -897,13 +902,23 @@
         var value = data.content[HOMEPAGE_FIELD_MAP[fieldId]];
         if (el && value !== undefined) el.value = value;
       });
+      homepageContentLoaded = true;
+      homepageSaveBtn.disabled = false;
+      homepageSaveBtn.textContent = "Save Changes";
     } catch (err) {
+      // Leave Save disabled — submitting now would overwrite every field
+      // with blanks, since none of them got populated.
+      homepageSaveBtn.textContent = "Couldn't load — reopen this tab to retry";
       toast(err.message, true);
     }
   }
 
   homepageForm.addEventListener("submit", async function (e) {
     e.preventDefault();
+    if (!homepageContentLoaded) {
+      toast("Current content hasn't finished loading — please wait and try again.", true);
+      return;
+    }
     var payload = {};
     Object.keys(HOMEPAGE_FIELD_MAP).forEach(function (fieldId) {
       var el = document.getElementById(fieldId);
