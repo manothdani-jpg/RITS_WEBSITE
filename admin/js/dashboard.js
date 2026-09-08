@@ -419,11 +419,15 @@
         var rsvps = await api("/events/" + ev.id + "/rsvps").catch(function () { return { rsvps: [] }; });
         return (
           "<tr>" +
+          "<td>" + (ev.flyer_filename
+            ? '<img src="' + apiOrigin + "/uploads/events/" + ev.flyer_filename + '" alt="Flyer for ' + escapeHtml(ev.name) + '" style="width:40px; height:40px; object-fit:cover; border-radius:var(--radius-sm);">'
+            : "—") + "</td>" +
           "<td>" + escapeHtml(ev.name) + "</td>" +
           "<td>" + fmtDateTime(ev.event_date) + "</td>" +
           "<td>" + escapeHtml(ev.location || "—") + "</td>" +
           "<td>" + rsvps.rsvps.length + "</td>" +
           '<td class="row-actions">' +
+          '<button class="icon-btn" data-manage-flyer="' + ev.id + '" data-event-name="' + escapeHtml(ev.name) + '" aria-label="Manage flyer for ' + escapeHtml(ev.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>' +
           '<button class="icon-btn" data-view-attendees="' + ev.id + '" data-event-name="' + escapeHtml(ev.name) + '" aria-label="View attendees for ' + escapeHtml(ev.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>' +
           '<button class="icon-btn" data-manage-pricing="' + ev.id + '" data-event-name="' + escapeHtml(ev.name) + '" aria-label="Manage pricing for ' + escapeHtml(ev.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></button>' +
           '<button class="icon-btn" data-del-event="' + ev.id + '" aria-label="Delete ' + escapeHtml(ev.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></button>' +
@@ -440,6 +444,12 @@
     var delBtn = e.target.closest("[data-del-event]");
     var pricingBtn = e.target.closest("[data-manage-pricing]");
     var attendeesBtn = e.target.closest("[data-view-attendees]");
+    var flyerBtn = e.target.closest("[data-manage-flyer]");
+
+    if (flyerBtn) {
+      openFlyerModal(flyerBtn.getAttribute("data-manage-flyer"), flyerBtn.getAttribute("data-event-name"));
+      return;
+    }
 
     if (attendeesBtn) {
       openAttendeesModal(attendeesBtn.getAttribute("data-view-attendees"), attendeesBtn.getAttribute("data-event-name"));
@@ -609,6 +619,72 @@
   document.getElementById("attendees-modal-close").addEventListener("click", closeAttendeesModal);
   document.getElementById("attendees-close-btn").addEventListener("click", closeAttendeesModal);
   attendeesModal.addEventListener("click", function (e) { if (e.target === attendeesModal) closeAttendeesModal(); });
+
+  /* ============================================================
+     EVENT FLYER
+     ============================================================ */
+  var flyerModal = document.getElementById("flyer-modal");
+  var currentFlyerEventId = null;
+
+  function renderFlyerPreview(filename) {
+    var host = document.getElementById("flyer-preview");
+    var removeBtn = document.getElementById("flyer-remove-btn");
+    if (filename) {
+      host.innerHTML = '<img src="' + apiOrigin + "/uploads/events/" + filename + '" alt="Current flyer" style="max-width:100%; border-radius:var(--radius-sm);">';
+      removeBtn.style.display = "";
+    } else {
+      host.innerHTML = '<p class="empty-note">No flyer uploaded yet.</p>';
+      removeBtn.style.display = "none";
+    }
+  }
+
+  function openFlyerModal(eventId, eventName) {
+    currentFlyerEventId = eventId;
+    document.getElementById("flyer-modal-title").textContent = "Flyer — " + eventName;
+    document.getElementById("flyer-upload-form").reset();
+    var ev = allEvents.find(function (e) { return e.id === eventId; });
+    renderFlyerPreview(ev ? ev.flyer_filename : null);
+    flyerModal.classList.add("is-open");
+  }
+
+  function closeFlyerModal() { flyerModal.classList.remove("is-open"); currentFlyerEventId = null; }
+  document.getElementById("flyer-modal-close").addEventListener("click", closeFlyerModal);
+  document.getElementById("flyer-close-btn").addEventListener("click", closeFlyerModal);
+  flyerModal.addEventListener("click", function (e) { if (e.target === flyerModal) closeFlyerModal(); });
+
+  document.getElementById("flyer-upload-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var fileInput = document.getElementById("flyer-file");
+    if (!fileInput.files[0]) return;
+    var formData = new FormData();
+    formData.append("flyer", fileInput.files[0]);
+    try {
+      var res = await fetch(API + "/events/" + currentFlyerEventId + "/flyer", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+        body: formData,
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || "Could not upload flyer");
+      renderFlyerPreview(data.flyer_filename);
+      loadEvents();
+      toast("Flyer uploaded");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  document.getElementById("flyer-remove-btn").addEventListener("click", async function () {
+    if (!confirm("Remove this event's flyer?")) return;
+    try {
+      await api("/events/" + currentFlyerEventId + "/flyer", { method: "DELETE" });
+      renderFlyerPreview(null);
+      loadEvents();
+      toast("Flyer removed");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
 
   eventForm.addEventListener("submit", async function (e) {
     e.preventDefault();

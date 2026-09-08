@@ -2,6 +2,7 @@
   "use strict";
 
   var API = window.RITS_API_BASE;
+  var apiOrigin = API.replace(/\/api\/?$/, "");
   var token = localStorage.getItem("rits_member_token");
   if (!token) {
     window.location.href = "index.html";
@@ -342,13 +343,22 @@
     }).join("");
   }
 
+  function flyerThumb(ev) {
+    return ev.flyer_filename
+      ? '<img src="' + apiOrigin + "/uploads/events/" + ev.flyer_filename + '" alt="" style="width:48px; height:48px; object-fit:cover; border-radius:var(--radius-sm); margin-right:.75rem; flex-shrink:0;">'
+      : "";
+  }
+
   function renderFreeEventRow(ev, rsvp) {
     var going = rsvp && rsvp.status === "registered";
     return (
       '<div class="event-row">' +
+      '<div style="display:flex; align-items:center;">' +
+      flyerThumb(ev) +
       "<div>" +
       "<h3>" + escapeHtml(ev.name) + "</h3>" +
       '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
+      "</div>" +
       "</div>" +
       '<div class="actions">' +
       (going
@@ -403,9 +413,12 @@
         : "";
       return (
         '<div class="event-row" style="flex-wrap:wrap;">' +
+        '<div style="display:flex; align-items:center;">' +
+        flyerThumb(ev) +
         "<div>" +
         "<h3>" + escapeHtml(ev.name) + "</h3>" +
         '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
+        "</div>" +
         "</div>" +
         '<span class="badge badge-paid">Registered &middot; ' + fmtMoney(rsvp.amount_cents) + " paid</span>" +
         selectionsHtml +
@@ -416,9 +429,12 @@
     if (rsvp && rsvp.status === "pending_payment") {
       return (
         '<div class="event-row">' +
+        '<div style="display:flex; align-items:center;">' +
+        flyerThumb(ev) +
         "<div>" +
         "<h3>" + escapeHtml(ev.name) + "</h3>" +
         '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
+        "</div>" +
         "</div>" +
         '<span class="badge badge-pending">Payment pending</span>' +
         "</div>"
@@ -453,7 +469,10 @@
     return (
       '<div class="event-row priced-event-row" data-priced-event="' + ev.id + '">' +
       "<div style=\"width:100%;\">" +
-      "<h3>" + escapeHtml(ev.name) + "</h3>" +
+      '<div style="display:flex; align-items:center;">' +
+      flyerThumb(ev) +
+      "<h3 style=\"margin:0;\">" + escapeHtml(ev.name) + "</h3>" +
+      "</div>" +
       '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
       '<div class="pricing-selections">' + participationHtml + addonHtml + "</div>" +
       nonMemberNotice +

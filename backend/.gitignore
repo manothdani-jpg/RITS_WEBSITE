@@ -4,6 +4,8 @@ node_modules/
 uploads/gallery/*
 uploads/sponsors/*
 uploads/board/*
+uploads/events/*
 !uploads/gallery/.gitkeep
 !uploads/sponsors/.gitkeep
 !uploads/board/.gitkeep
+!uploads/events/.gitkeep

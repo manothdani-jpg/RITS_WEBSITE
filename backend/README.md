@@ -139,6 +139,7 @@ psql "$DATABASE_URL" -f db/migrations/014_board_profiles.sql
 psql "$DATABASE_URL" -f db/migrations/015_family_member_details.sql
 psql "$DATABASE_URL" -f db/migrations/016_event_addon_topup.sql
 psql "$DATABASE_URL" -f db/migrations/017_event_selection_refunds.sql
+psql "$DATABASE_URL" -f db/migrations/018_event_flyers.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -237,6 +238,8 @@ dashboard) to point at the real API URL.
 | GET | `/api/events` | — | List events (public, for the site + portal) |
 | POST | `/api/events` | admin/board | Create event |
 | PUT/DELETE | `/api/events/:id` | admin/board | Update/delete event |
+| POST | `/api/events/:id/flyer` | admin/board | Upload/replace an event's flyer (`multipart/form-data`: `flyer`) |
+| DELETE | `/api/events/:id/flyer` | admin/board | Remove an event's flyer |
 | GET | `/api/events/:id/rsvps` | admin/board | Attendee list for an event |
 | POST | `/api/rsvps` | — (rate-limited) | Public RSVP by member email (no login) |
 | POST | `/api/rsvps/me` | member | Logged-in member RSVPs for themselves |
@@ -298,7 +301,8 @@ are not interchangeable — each only works against its own set of routes.
   Categories" above), `payment_status` (pending/paid/overdue/waived),
   join/renewal dates.
 - `family_members` — spouse/children/etc. linked to a member.
-- `events` — name, date, location, description.
+- `events` — name, date, location, description, `flyer_filename` (on
+  local disk, see "Event flyers" above).
 - `rsvps` — links a member to an event, with guest count, computed
   `amount_cents` for priced events, status
   (pending_payment/registered/attended/cancelled/no_show), and
@@ -402,6 +406,34 @@ and POST it to `/api/payments/webhook` with an `x-square-hmacsha256-signature`
 header. What you *can't* test without real Sandbox credentials is
 `/api/payments/checkout` actually reaching Square — it fails with a clear
 "Square isn't configured yet" error until `SQUARE_ACCESS_TOKEN` is set.
+
+## Event flyers + past events
+
+Each event can have a flyer image, uploaded from `../admin/` → "Events" →
+the image icon on any event row. Uploading replaces the previous flyer
+(old file deleted from disk); a separate "Remove Flyer" action clears it.
+Files live on local disk under `uploads/events/` (same pattern as gallery
+photos/sponsor logos/board photos — see "Deployment note" under "Media"
+above about persistent storage), served at `/uploads/events/<filename>`,
+and referenced from `events.flyer_filename`.
+
+The flyer shows up everywhere the event does — the public homepage's
+featured "Upcoming Event" card, every event row in the member portal
+(whether free, priced-but-unregistered, or already registered), and the
+admin Events table (as a small thumbnail) — since all three just read
+`ev.flyer_filename` off the same `GET /api/events` response and build the
+image URL themselves; there's no separate "flyer" endpoint to fetch.
+
+**Past events** show up automatically in a "Past Events" section on the
+public homepage (`index.html` → `#past-events`) — no admin action
+needed. It's driven by the same `GET /api/events` call the featured-event
+card already makes, client-side filtered to `event_date < now` (mirroring
+how the portal filters the opposite direction for its "Upcoming Events"
+list) and sorted most-recent-first. An event with a flyer shows the image;
+one without falls back to the same gradient placeholder tile style the
+Gallery section uses. The whole section stays `display:none` until at
+least one past event exists, so a brand-new install with no history yet
+doesn't show an empty section.
 
 ## Event pricing (participation types + add-ons)
 

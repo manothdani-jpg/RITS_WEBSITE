@@ -124,7 +124,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Event</th><th>Date</th><th>Location</th><th>RSVPs</th><th></th></tr>
+            <tr><th>Flyer</th><th>Event</th><th>Date</th><th>Location</th><th>RSVPs</th><th></th></tr>
           </thead>
           <tbody id="events-tbody"></tbody>
         </table>
@@ -604,6 +604,27 @@
     </div>
     <div class="modal-actions">
       <button type="button" class="btn btn-outline-dark btn-sm" id="attendees-close-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Event flyer modal ==================== -->
+<div class="modal-backdrop" id="flyer-modal">
+  <div class="modal" style="width:min(100%,420px);">
+    <div class="modal-head">
+      <h2 id="flyer-modal-title">Flyer</h2>
+      <button class="modal-close" id="flyer-modal-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="flyer-preview" style="margin-bottom:1.25rem;"></div>
+    <form id="flyer-upload-form" class="add-family-row" style="flex-wrap:wrap;">
+      <input type="file" id="flyer-file" accept="image/png,image/jpeg,image/webp,image/gif" required style="flex:1; min-width:200px;">
+      <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+    </form>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline-dark btn-sm" id="flyer-remove-btn" style="margin-right:auto; display:none;">Remove Flyer</button>
+      <button type="button" class="btn btn-outline-dark btn-sm" id="flyer-close-btn">Close</button>
     </div>
   </div>
 </div>

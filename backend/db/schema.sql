@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS events (
   description   TEXT,
   event_date    TIMESTAMPTZ NOT NULL,
   location      TEXT,
+  flyer_filename TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

@@ -159,6 +159,16 @@
         if (ev.location) { locEl.textContent = ev.location; locEl.classList.remove("ph"); }
         else { locEl.parentElement.style.display = "none"; }
       }
+      var flyerEl = document.getElementById("featured-event-flyer");
+      if (flyerEl) {
+        if (ev.flyer_filename) {
+          flyerEl.src = apiBase.replace(/\/api\/?$/, "") + "/uploads/events/" + ev.flyer_filename;
+          flyerEl.alt = ev.name + " flyer";
+          flyerEl.style.display = "";
+        } else {
+          flyerEl.style.display = "none";
+        }
+      }
       if (note) note.style.display = "none";
 
       activateCountdown(ev.event_date);
@@ -190,6 +200,49 @@
       }).join("");
     } catch (err) {
       // Backend not running — keep the placeholder tiles already in the HTML.
+    }
+  })();
+
+  /* ---------------- Past events (from the real events API) ---------------- */
+  (async function loadPastEvents() {
+    var grid = document.getElementById("past-events-grid");
+    var section = document.getElementById("past-events");
+    if (!grid || !section) return;
+    try {
+      var apiBase = window.RITS_API_BASE || "";
+      var apiOrigin = apiBase.replace(/\/api\/?$/, "");
+      var res = await fetch(apiBase + "/events");
+      if (!res.ok) return;
+      var data = await res.json();
+      var now = new Date();
+      var past = data.events
+        .filter(function (ev) { return new Date(ev.event_date) < now; })
+        .sort(function (a, b) { return new Date(b.event_date) - new Date(a.event_date); })
+        .slice(0, 8);
+      if (!past.length) return; // section stays hidden
+
+      var gradients = ["g1", "g2", "g3", "g4", "g5"];
+      grid.innerHTML = past.map(function (ev, i) {
+        var dateStr = new Date(ev.event_date).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+        var label = escapeHtmlLite(ev.name) + " — " + dateStr;
+        if (ev.flyer_filename) {
+          return (
+            '<div class="g-item g-photo">' +
+            '<img src="' + apiOrigin + "/uploads/events/" + ev.flyer_filename + '" alt="' + escapeHtmlLite(ev.name) + '" loading="lazy">' +
+            '<span class="g-caption">' + label + "</span>" +
+            "</div>"
+          );
+        }
+        return (
+          '<div class="g-item ' + gradients[i % gradients.length] + '">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>' +
+          "<span>" + label + "</span>" +
+          "</div>"
+        );
+      }).join("");
+      section.style.display = "";
+    } catch (err) {
+      // Backend not running — section stays hidden.
     }
   })();
 

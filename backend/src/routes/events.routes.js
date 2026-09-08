@@ -1,8 +1,12 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const db = require("../db");
 const { requireAdmin } = require("../middleware/auth");
+const { makeUploader, UPLOADS_ROOT } = require("../upload");
 
 const router = express.Router();
+const uploadFlyer = makeUploader("events");
 
 // GET /api/events — public, so the site can list upcoming events
 router.get("/", async (req, res) => {
@@ -131,8 +135,50 @@ router.put("/:id", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-  const { rowCount } = await db.query("DELETE FROM events WHERE id = $1", [req.params.id]);
-  if (!rowCount) return res.status(404).json({ error: "Event not found" });
+  const { rows } = await db.query("DELETE FROM events WHERE id = $1 RETURNING flyer_filename", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Event not found" });
+  if (rows[0].flyer_filename) {
+    fs.unlink(path.join(UPLOADS_ROOT, "events", rows[0].flyer_filename), () => {});
+  }
+  res.status(204).send();
+});
+
+// POST /api/events/:id/flyer — upload/replace an event's flyer image.
+// multipart/form-data: flyer (file)
+router.post("/:id/flyer", (req, res) => {
+  uploadFlyer.single("flyer")(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: "No flyer uploaded" });
+
+    try {
+      const existing = await db.query("SELECT flyer_filename FROM events WHERE id = $1", [req.params.id]);
+      if (!existing.rows[0]) {
+        fs.unlink(path.join(UPLOADS_ROOT, "events", req.file.filename), () => {});
+        return res.status(404).json({ error: "Event not found" });
+      }
+      const oldFilename = existing.rows[0].flyer_filename;
+
+      await db.query("UPDATE events SET flyer_filename = $1 WHERE id = $2", [req.file.filename, req.params.id]);
+      if (oldFilename) fs.unlink(path.join(UPLOADS_ROOT, "events", oldFilename), () => {});
+
+      res.status(201).json({ flyer_filename: req.file.filename });
+    } catch (dbErr) {
+      fs.unlink(path.join(UPLOADS_ROOT, "events", req.file.filename), () => {});
+      console.error(dbErr);
+      res.status(500).json({ error: "Could not save flyer" });
+    }
+  });
+});
+
+// DELETE /api/events/:id/flyer
+router.delete("/:id/flyer", async (req, res) => {
+  const existing = await db.query("SELECT flyer_filename FROM events WHERE id = $1", [req.params.id]);
+  if (!existing.rows[0]) return res.status(404).json({ error: "Event not found" });
+
+  await db.query("UPDATE events SET flyer_filename = NULL WHERE id = $1", [req.params.id]);
+  if (existing.rows[0].flyer_filename) {
+    fs.unlink(path.join(UPLOADS_ROOT, "events", existing.rows[0].flyer_filename), () => {});
+  }
   res.status(204).send();
 });
 
