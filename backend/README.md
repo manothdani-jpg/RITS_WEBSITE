@@ -47,14 +47,19 @@ except admin-account management (`../admin/` → "Admin Logins" tab and
   caveat as Media above.
 - **Homepage** (`../admin/` → "Homepage", both roles) — edits the hero
   headline/motto/subheading, hero stats (member families, events/year,
-  founded year), mission statement, the three "about" bullets, the
+  founded year), mission statement, the three "about" bullets, the title
+  + description of each of the four "Pillars of RITS" cards, the
   membership/sponsorship notes on the Get Involved cards, and contact
   info — all shown live on `../index.html`. Backed by a generic
   `site_content` key/value table (see Data model), so the editable set can
-  grow by adding a new key + a form field, no schema change needed. The
-  homepage's featured "Upcoming Event" card isn't part of this — it's
-  wired directly to whichever event has the soonest `event_date` in the
-  Events tab, so it updates itself automatically.
+  grow by adding a new key + a form field, no schema change needed (the
+  pillars were added exactly this way — 8 new keys, 8 new form fields,
+  no backend code change since `PUT /api/site-content` already accepts
+  any key). The homepage's featured "Upcoming Event" card isn't part of
+  this — it's wired directly to whichever event has the soonest
+  `event_date` in the Events tab, so it updates itself automatically.
+  The pillar icons themselves (and the fixed count of four) aren't
+  editable — only each pillar's title and description text.
 - **Communications** (`../admin/` → "Communications", both roles) — compose
   a subject/body and email it to members, optionally filtered by
   membership tier and/or payment status. `{{first_name}}` in the body is
@@ -140,6 +145,7 @@ psql "$DATABASE_URL" -f db/migrations/015_family_member_details.sql
 psql "$DATABASE_URL" -f db/migrations/016_event_addon_topup.sql
 psql "$DATABASE_URL" -f db/migrations/017_event_selection_refunds.sql
 psql "$DATABASE_URL" -f db/migrations/018_event_flyers.sql
+psql "$DATABASE_URL" -f db/migrations/019_pillar_content.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
