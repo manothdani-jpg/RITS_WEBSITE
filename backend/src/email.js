@@ -55,4 +55,8 @@ async function sendEmail({ to, subject, text, html }) {
   return { delivered: true };
 }
 
-module.exports = { sendEmail, getSettings, getTransporter };
+function formatMoney(cents) {
+  return "$" + ((cents || 0) / 100).toFixed(2);
+}
+
+module.exports = { sendEmail, getSettings, getTransporter, formatMoney };

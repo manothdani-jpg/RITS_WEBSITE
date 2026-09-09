@@ -24,9 +24,13 @@
     border:1px solid color-mix(in srgb, var(--rule) 20%, transparent);
   }
   .cr-participant-row .form-row{ margin-bottom:0; }
+  .cr-participant-fee{ grid-column:1/-1; font-size:.85rem; color:var(--maroon); font-weight:600; }
   .cr-remove-btn{ background:none; border:none; cursor:pointer; color:var(--maroon); padding:.5em; }
   .cr-remove-btn svg{ width:18px; height:18px; }
   @media (max-width:640px){ .cr-participant-row{ grid-template-columns:1fr; } }
+  .cr-total-box{ background:#fff; border-radius:var(--radius-sm); padding:1rem 1.1rem; margin-top:1rem; border:1px solid color-mix(in srgb, var(--rule) 20%, transparent); }
+  .cr-total-row{ display:flex; align-items:center; justify-content:space-between; font-size:1.1rem; }
+  .cr-total-row strong{ color:var(--maroon); font-size:1.3rem; }
 </style>
 </head>
 <body>
@@ -98,6 +102,11 @@
       <div id="cf-participants-list"></div>
       <button type="button" class="btn btn-outline-dark btn-sm" id="cf-add-participant-btn">+ Add Participant</button>
 
+      <div class="cr-total-box" id="cf-total-box" style="display:none;">
+        <div class="cr-total-row"><span>Estimated total</span><strong id="cf-total-amount">$0.00</strong></div>
+        <p class="cr-fee-note">Active RITS members automatically get the lower member rate — this estimate assumes non-member pricing until each participant's membership is confirmed at checkout.</p>
+      </div>
+
       <div id="cf-error" class="form-note" style="color:var(--maroon); display:none; margin-top:1rem;"></div>
       <button type="submit" class="btn btn-primary" id="cf-submit-btn" style="width:100%; margin-top:1.5rem;">Register &amp; Pay</button>
     </form>
@@ -144,30 +153,63 @@
       '<div class="form-row"><label>Full name</label><input type="text" class="cf-p-name" required></div>' +
       '<div class="form-row"><label>Email (for membership check)</label><input type="email" class="cf-p-email"></div>' +
       '<div class="form-row"><label>Adult or Kid</label><select class="cf-p-age"><option value="adult">Adult</option><option value="kid">Kid</option></select></div>' +
-      '<button type="button" class="cr-remove-btn" aria-label="Remove participant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>';
+      '<button type="button" class="cr-remove-btn" aria-label="Remove participant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+      '<div class="cr-participant-fee" data-fee></div>';
     row.querySelector(".cr-remove-btn").addEventListener("click", function () {
       row.remove();
       updateParticipantCount();
+      recalcTotal();
     });
     document.getElementById("cf-participants-list").appendChild(row);
     updateParticipantCount();
+    recalcTotal();
   }
   function updateParticipantCount() {
     document.getElementById("cf-participant-count").textContent =
       document.querySelectorAll(".cr-participant-row").length;
   }
 
+  function currentCulturalEvent() {
+    var select = document.getElementById("cf-event");
+    return eventsWithCulturalFee.find(function (e) { return e.id === select.value; });
+  }
+
+  // Live per-participant fee + running total. The event's cultural fee is
+  // flat per participant, so the total is just fee × participant count —
+  // but each participant's actual rate (member vs non-member) is only
+  // resolved server-side at checkout, so this shows the non-member rate as
+  // a conservative estimate.
+  function recalcTotal() {
+    var ev = currentCulturalEvent();
+    var note = document.getElementById("cf-fee-note");
+    note.textContent = ev
+      ? "Member fee: " + fmtMoney(ev.cultural_member_fee_cents) + " per participant · Non-member fee: " + fmtMoney(ev.cultural_non_member_fee_cents) + " per participant."
+      : "";
+
+    var rows = document.querySelectorAll(".cr-participant-row");
+    var total = 0;
+    rows.forEach(function (row) {
+      var feeEl = row.querySelector("[data-fee]");
+      if (ev) {
+        feeEl.textContent = "Estimated fee: " + fmtMoney(ev.cultural_non_member_fee_cents);
+        total += ev.cultural_non_member_fee_cents;
+      } else {
+        feeEl.textContent = "";
+      }
+    });
+
+    var totalBox = document.getElementById("cf-total-box");
+    if (ev && rows.length) {
+      document.getElementById("cf-total-amount").textContent = fmtMoney(total);
+      totalBox.style.display = "";
+    } else {
+      totalBox.style.display = "none";
+    }
+  }
+
   document.getElementById("cf-add-participant-btn").addEventListener("click", addParticipantRow);
 
-  document.getElementById("cf-event").addEventListener("change", function () {
-    var ev = eventsWithCulturalFee.find(function (e) { return e.id === this.value; }, this);
-    var note = document.getElementById("cf-fee-note");
-    if (ev) {
-      note.textContent = "Member fee: " + fmtMoney(ev.cultural_member_fee_cents) + " per participant · Non-member fee: " + fmtMoney(ev.cultural_non_member_fee_cents) + " per participant.";
-    } else {
-      note.textContent = "";
-    }
-  });
+  document.getElementById("cf-event").addEventListener("change", recalcTotal);
 
   (async function loadEvents() {
     var select = document.getElementById("cf-event");

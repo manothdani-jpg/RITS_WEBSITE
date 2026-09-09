@@ -3,12 +3,39 @@ const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireAdmin } = require("../middleware/auth");
 const { createPaymentLink } = require("../square");
+const { sendEmail, formatMoney } = require("../email");
 
 const router = express.Router();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PERFORMANCE_TYPES = ["dance", "singing", "drama", "speech", "other"];
 const AGE_CATEGORIES = ["adult", "kid"];
+
+// Best-effort confirmation email for a cultural group registration — a
+// delivery failure should never affect the registration that already
+// succeeded.
+async function sendGroupConfirmation({ to, choreographerName, groupName, eventName, participants, totalCents }) {
+  try {
+    const rows = participants
+      .map((p) => `  - ${p.full_name} (${p.is_member ? "member" : "non-member"}): ${formatMoney(p.fee_cents)}`)
+      .join("\n");
+    const rowsHtml = participants
+      .map((p) => `<li>${p.full_name} (${p.is_member ? "member" : "non-member"}): ${formatMoney(p.fee_cents)}</li>`)
+      .join("");
+    await sendEmail({
+      to,
+      subject: `Cultural group registration confirmed — ${groupName}`,
+      text:
+        `Hi ${choreographerName},\n\n"${groupName}"'s registration for ${eventName} is confirmed:\n\n${rows}\n\n` +
+        `Total: ${formatMoney(totalCents)}\n\nRITS`,
+      html:
+        `<p>Hi ${choreographerName},</p><p>"${groupName}"'s registration for <strong>${eventName}</strong> is confirmed:</p>` +
+        `<ul>${rowsHtml}</ul><p>Total: <strong>${formatMoney(totalCents)}</strong></p><p>RITS</p>`,
+    });
+  } catch (err) {
+    console.error("Failed to send cultural group confirmation email:", err);
+  }
+}
 
 const submitLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -128,6 +155,14 @@ router.post("/", submitLimiter, async (req, res) => {
     }
 
     if (amountCents === 0) {
+      await sendGroupConfirmation({
+        to: choreographer_email,
+        choreographerName: choreographer_name,
+        groupName: group_name.trim(),
+        eventName: event.name,
+        participants: resolved,
+        totalCents: amountCents,
+      });
       return res.status(201).json({ group_id: groupId, amount_cents: 0, free: true });
     }
 

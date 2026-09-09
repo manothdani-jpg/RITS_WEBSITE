@@ -4,8 +4,33 @@ const crypto = require("crypto");
 const db = require("../db");
 const { requireMember, requireAdmin } = require("../middleware/auth");
 const { createPaymentLink, refundPayment, WebhooksHelper } = require("../square");
+const { sendEmail, formatMoney } = require("../email");
 
 const router = express.Router();
+
+// Best-effort confirmation email — a delivery failure should never affect
+// the payment/registration flow that already succeeded.
+async function sendConfirmationEmail(opts) {
+  try {
+    await sendEmail(opts);
+  } catch (err) {
+    console.error("Failed to send confirmation email:", err);
+  }
+}
+
+function lineItemsToText(lineItems) {
+  return lineItems
+    .map((li) => `  - ${li.name}${li.quantity && li.quantity > 1 ? ` ×${li.quantity}` : ""}: ${formatMoney(li.amountCents * (li.quantity || 1))}`)
+    .join("\n");
+}
+
+function lineItemsToHtml(lineItems) {
+  return (
+    "<ul>" +
+    lineItems.map((li) => `<li>${li.name}${li.quantity && li.quantity > 1 ? ` ×${li.quantity}` : ""}: ${formatMoney(li.amountCents * (li.quantity || 1))}</li>`).join("") +
+    "</ul>"
+  );
+}
 
 const checkoutLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -155,6 +180,12 @@ router.post("/event-checkout", checkoutLimiter, requireMember, async (req, res) 
     }
 
     if (amountCents === 0) {
+      await sendConfirmationEmail({
+        to: req.member.email,
+        subject: `You're registered for ${event.name}`,
+        text: `Hi ${req.member.name || "there"},\n\nYou're confirmed for ${event.name}:\n\n${lineItemsToText(lineItems)}\n\nSee you there!\n\nRITS`,
+        html: `<p>Hi ${req.member.name || "there"},</p><p>You're confirmed for <strong>${event.name}</strong>:</p>${lineItemsToHtml(lineItems)}<p>See you there!</p><p>RITS</p>`,
+      });
       return res.status(201).json({ rsvp_id: rsvpId, amount_cents: 0, free: true });
     }
 
@@ -247,6 +278,12 @@ router.post("/event-addon-checkout", checkoutLimiter, requireMember, async (req,
           [rsvp.id, s.pricing_option_id, s.quantity, s.amount_cents]
         );
       }
+      await sendConfirmationEmail({
+        to: req.member.email,
+        subject: `Your add-on purchase for ${event.name} is confirmed`,
+        text: `Hi ${req.member.name || "there"},\n\nWe've added the following to your registration for ${event.name}:\n\n${lineItemsToText(lineItems)}\n\nRITS`,
+        html: `<p>Hi ${req.member.name || "there"},</p><p>We've added the following to your registration for <strong>${event.name}</strong>:</p>${lineItemsToHtml(lineItems)}<p>RITS</p>`,
+      });
       return res.status(201).json({ rsvp_id: rsvp.id, amount_cents: 0, free: true });
     }
 
@@ -461,7 +498,18 @@ router.post("/webhook", async (req, res) => {
 
 async function handlePaymentUpdate(squarePayment) {
   const { rows } = await db.query(
-    "SELECT id, member_id, purpose, rsvp_id, cultural_group_id, status, amount_cents, pending_selections FROM payments WHERE square_order_id = $1",
+    `SELECT p.id, p.member_id, p.purpose, p.tier, p.rsvp_id, p.cultural_group_id, p.status, p.amount_cents, p.pending_selections,
+            m.first_name, m.email,
+            e.name AS event_name,
+            cg.group_name AS cultural_group_name,
+            (SELECT COUNT(*) FROM cultural_group_participants WHERE group_id = p.cultural_group_id)::int AS participant_count,
+            mc.label AS tier_label
+     FROM payments p
+     JOIN members m ON m.id = p.member_id
+     LEFT JOIN events e ON e.id = p.event_id
+     LEFT JOIN cultural_groups cg ON cg.id = p.cultural_group_id
+     LEFT JOIN membership_categories mc ON mc.key = p.tier
+     WHERE p.square_order_id = $1`,
     [squarePayment.order_id]
   );
   const paymentRow = rows[0];
@@ -493,14 +541,33 @@ async function handlePaymentUpdate(squarePayment) {
         "UPDATE rsvps SET amount_cents = amount_cents + $1 WHERE id = $2",
         [paymentRow.amount_cents, paymentRow.rsvp_id]
       );
+      await sendConfirmationEmail({
+        to: paymentRow.email,
+        subject: `Your add-on purchase for ${paymentRow.event_name} is confirmed`,
+        text: `Hi ${paymentRow.first_name || "there"},\n\nWe've received your payment of ${formatMoney(paymentRow.amount_cents)} for additional items for ${paymentRow.event_name}.\n\nRITS`,
+        html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>We've received your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for additional items for <strong>${paymentRow.event_name}</strong>.</p><p>RITS</p>`,
+      });
     } else if (paymentRow.purpose === "event") {
       if (paymentRow.rsvp_id) {
         await db.query("UPDATE rsvps SET status = 'registered' WHERE id = $1", [paymentRow.rsvp_id]);
       }
+      await sendConfirmationEmail({
+        to: paymentRow.email,
+        subject: `You're registered for ${paymentRow.event_name}`,
+        text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for ${paymentRow.event_name} has been received — you're registered!\n\nSee you there!\n\nRITS`,
+        html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for <strong>${paymentRow.event_name}</strong> has been received — you're registered!</p><p>See you there!</p><p>RITS</p>`,
+      });
     } else if (paymentRow.purpose === "cultural_group") {
       if (paymentRow.cultural_group_id) {
         await db.query("UPDATE cultural_groups SET status = 'registered' WHERE id = $1", [paymentRow.cultural_group_id]);
       }
+      const participantText = paymentRow.participant_count === 1 ? "1 participant" : `${paymentRow.participant_count} participants`;
+      await sendConfirmationEmail({
+        to: paymentRow.email,
+        subject: `Cultural group registration confirmed — ${paymentRow.cultural_group_name}`,
+        text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for "${paymentRow.cultural_group_name}"'s registration for ${paymentRow.event_name} (${participantText}) has been received. You're all set!\n\nRITS`,
+        html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for "${paymentRow.cultural_group_name}"'s registration for <strong>${paymentRow.event_name}</strong> (${participantText}) has been received. You're all set!</p><p>RITS</p>`,
+      });
     } else {
       const renewalDate = new Date();
       renewalDate.setFullYear(renewalDate.getFullYear() + 1);
@@ -508,6 +575,12 @@ async function handlePaymentUpdate(squarePayment) {
         "UPDATE members SET payment_status = 'paid', renewal_date = $1 WHERE id = $2",
         [renewalDate.toISOString().slice(0, 10), paymentRow.member_id]
       );
+      await sendConfirmationEmail({
+        to: paymentRow.email,
+        subject: "RITS membership payment confirmed",
+        text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for ${paymentRow.tier_label || "your"} membership dues has been received. Your membership is active through ${renewalDate.toLocaleDateString()}.\n\nThank you!\n\nRITS`,
+        html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for ${paymentRow.tier_label || "your"} membership dues has been received. Your membership is active through ${renewalDate.toLocaleDateString()}.</p><p>Thank you!</p><p>RITS</p>`,
+      });
     }
   } else if (["FAILED", "CANCELED"].includes(squarePayment.status)) {
     await db.query(
