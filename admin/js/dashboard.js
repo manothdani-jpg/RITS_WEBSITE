@@ -104,7 +104,7 @@
       if (view === "events") loadEvents();
       if (view === "homepage") loadHomepageContent();
       if (view === "media") loadMedia();
-      if (view === "admins") loadAdmins();
+      if (view === "admins") { loadAdmins(); loadMailSettings(); }
       if (view === "board-roster") loadBoardRoster();
       if (view === "volunteers") loadVolunteers();
       if (view === "communications") refreshRecipientCount();
@@ -805,6 +805,68 @@
       loadAdmins();
     } catch (err) {
       toast(err.message, true);
+    }
+  });
+
+  /* ============================================================
+     MAIL SERVER SETTINGS (superadmin only)
+     ============================================================ */
+  var mailSettingsForm = document.getElementById("mail-settings-form");
+
+  async function loadMailSettings() {
+    if (!isSuperAdmin) return;
+    try {
+      var data = await api("/mail-settings");
+      var s = data.settings || {};
+      document.getElementById("ms-host").value = s.smtp_host || "";
+      document.getElementById("ms-port").value = s.smtp_port || "";
+      document.getElementById("ms-user").value = s.smtp_user || "";
+      document.getElementById("ms-from").value = s.from_address || "";
+      document.getElementById("ms-secure").checked = !!s.smtp_secure;
+      document.getElementById("ms-password").value = "";
+      var badge = document.getElementById("mail-status-badge");
+      badge.innerHTML = s.smtp_host
+        ? '<span class="badge badge-paid">Configured' + (s.has_password ? "" : " — no password set") + '</span>'
+        : '<span class="badge badge-tier">Not configured — password resets and communications will be logged to the server console instead of sent</span>';
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  mailSettingsForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var payload = {
+      smtp_host: document.getElementById("ms-host").value.trim(),
+      smtp_port: document.getElementById("ms-port").value ? Number(document.getElementById("ms-port").value) : 587,
+      smtp_secure: document.getElementById("ms-secure").checked,
+      smtp_user: document.getElementById("ms-user").value.trim(),
+      from_address: document.getElementById("ms-from").value.trim(),
+    };
+    var password = document.getElementById("ms-password").value;
+    if (password) payload.password = password;
+    try {
+      await api("/mail-settings", { method: "PUT", body: payload });
+      toast("Mail settings saved");
+      loadMailSettings();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  document.getElementById("ms-test-btn").addEventListener("click", async function () {
+    var to = document.getElementById("ms-test-to").value.trim();
+    if (!to) { toast("Enter a recipient email first.", true); return; }
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    try {
+      await api("/mail-settings/test", { method: "POST", body: { to: to } });
+      toast("Test email sent — check the inbox.");
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Send Test Email";
     }
   });
 

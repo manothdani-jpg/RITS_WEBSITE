@@ -188,6 +188,27 @@ CREATE TABLE IF NOT EXISTS payment_page_content (
 INSERT INTO payment_page_content (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------
+-- SMTP configuration — editable from the admin dashboard instead of
+-- only via .env. Password is encrypted at rest (see src/crypto.js).
+-- ---------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mail_settings (
+  id                   INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  smtp_host            TEXT,
+  smtp_port            INTEGER NOT NULL DEFAULT 587,
+  smtp_secure          BOOLEAN NOT NULL DEFAULT false,
+  smtp_user            TEXT,
+  smtp_pass_encrypted  TEXT,
+  from_address         TEXT NOT NULL DEFAULT 'RITS <no-reply@ritamilsangam.org>',
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO mail_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+CREATE TRIGGER trg_mail_settings_updated_at
+  BEFORE UPDATE ON mail_settings
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ---------------------------------------------------------------
 -- Payments — tracks Square checkout sessions for dues payments.
 -- ---------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS payments (

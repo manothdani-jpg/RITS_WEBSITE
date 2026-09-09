@@ -1,29 +1,41 @@
 const nodemailer = require("nodemailer");
+const db = require("./db");
+const { decrypt } = require("./crypto");
 
-let transporter = null;
+async function getSettings() {
+  const { rows } = await db.query("SELECT * FROM mail_settings WHERE id = 1");
+  return rows[0] || null;
+}
 
-function getTransporter() {
-  if (transporter) return transporter;
-  if (!process.env.SMTP_HOST) return null;
+async function getTransporter(settings) {
+  if (!settings || !settings.smtp_host) return null;
 
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === "true", // true for port 465, false for 587/25
-    auth: process.env.SMTP_USER
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-      : undefined,
+  let pass;
+  if (settings.smtp_pass_encrypted) {
+    try {
+      pass = decrypt(settings.smtp_pass_encrypted);
+    } catch (err) {
+      console.error("[email] Could not decrypt stored SMTP password:", err.message);
+      return null;
+    }
+  }
+
+  return nodemailer.createTransport({
+    host: settings.smtp_host,
+    port: settings.smtp_port || 587,
+    secure: !!settings.smtp_secure,
+    auth: settings.smtp_user ? { user: settings.smtp_user, pass } : undefined,
   });
-  return transporter;
 }
 
 /**
- * Sends an email if SMTP_* env vars are configured; otherwise logs the
- * content to the console so the flow is still testable in local dev
- * without real email infrastructure.
+ * Sends an email if SMTP is configured (Admin Logins → Mail Server
+ * Settings); otherwise logs the content to the console so the flow is
+ * still testable in local dev without real email infrastructure.
  */
 async function sendEmail({ to, subject, text, html }) {
-  const t = getTransporter();
+  const settings = await getSettings();
+  const t = await getTransporter(settings);
 
   if (!t) {
     console.log("\n[email] SMTP not configured — printing email instead of sending:");
@@ -34,7 +46,7 @@ async function sendEmail({ to, subject, text, html }) {
   }
 
   await t.sendMail({
-    from: process.env.SMTP_FROM || "RITS <no-reply@ritamilsangam.org>",
+    from: (settings && settings.from_address) || "RITS <no-reply@ritamilsangam.org>",
     to,
     subject,
     text,
@@ -43,4 +55,4 @@ async function sendEmail({ to, subject, text, html }) {
   return { delivered: true };
 }
 
-module.exports = { sendEmail };
+module.exports = { sendEmail, getSettings, getTransporter };

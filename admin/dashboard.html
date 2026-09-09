@@ -466,6 +466,33 @@
         </table>
         <div class="empty-state" id="admins-empty" style="display:none;">No board members yet.</div>
       </div>
+
+      <div class="admin-topbar" style="margin-bottom:1.25rem;">
+        <div>
+          <h1 style="font-size:1.15rem;">Mail Server Settings</h1>
+          <p>SMTP configuration used for password-reset emails and Communications. <span id="mail-status-badge"></span></p>
+        </div>
+      </div>
+      <div class="table-wrap" style="padding:1.75rem;">
+        <form id="mail-settings-form">
+          <div class="field-grid" style="margin-bottom:1.1rem;">
+            <div class="form-row"><label for="ms-host">SMTP host</label><input id="ms-host" placeholder="smtp.example.com"></div>
+            <div class="form-row"><label for="ms-port">Port</label><input type="number" id="ms-port" placeholder="587"></div>
+            <div class="form-row"><label for="ms-user">Username</label><input id="ms-user"></div>
+            <div class="form-row"><label for="ms-password">Password</label><input type="password" id="ms-password" placeholder="Leave blank to keep current password" autocomplete="new-password"></div>
+            <div class="form-row"><label for="ms-from">From address</label><input id="ms-from" placeholder="RITS &lt;no-reply@ritamilsangam.org&gt;"></div>
+            <div class="form-row" style="align-self:end;"><label style="display:flex; align-items:center; gap:.5rem; font-weight:400;"><input type="checkbox" id="ms-secure" style="width:auto;"> Use SSL/TLS (port 465)</label></div>
+          </div>
+          <div class="modal-actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn btn-primary btn-sm">Save Mail Settings</button>
+          </div>
+        </form>
+        <div class="section-title">Send a Test Email</div>
+        <div class="add-family-row">
+          <input type="email" id="ms-test-to" placeholder="you@example.com">
+          <button type="button" class="btn btn-outline-dark btn-sm" id="ms-test-btn">Send Test Email</button>
+        </div>
+      </div>
     </section>
   </main>
 </div>

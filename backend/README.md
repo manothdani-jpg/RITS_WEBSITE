@@ -127,7 +127,7 @@ createdb rits_dev
 # 3. Configure environment
 cp .env.example .env
 # edit .env: set DATABASE_URL to your local Postgres connection string,
-# and generate a JWT_SECRET with:
+# and generate JWT_SECRET and ENCRYPTION_KEY (two different values) with:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
 # 4. Apply the schema (fresh database) ...
@@ -153,6 +153,7 @@ psql "$DATABASE_URL" -f db/migrations/017_event_selection_refunds.sql
 psql "$DATABASE_URL" -f db/migrations/018_event_flyers.sql
 psql "$DATABASE_URL" -f db/migrations/019_pillar_content.sql
 psql "$DATABASE_URL" -f db/migrations/020_social_links.sql
+psql "$DATABASE_URL" -f db/migrations/021_mail_settings.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -181,13 +182,16 @@ set on the public signup form. Uses `../portal/js/config.js` for the API
 base URL. Forgot their password? `../portal/forgot-password.html` emails a
 one-hour, single-use reset link to `../portal/reset-password.html`.
 
-**Email setup:** password reset emails go through `src/email.js` via SMTP.
-With no `SMTP_*` vars set (the local dev default), reset links are printed
-to the server console instead of sent — good enough to test the flow, not
-for real members. Before relying on this for real members, set `SMTP_HOST`,
-`SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` in `.env` to any SMTP
+**Email setup:** password reset emails (and Communications, see below) go
+through `src/email.js` via SMTP, configured from `../admin/` → "Admin
+Logins" → "Mail Server Settings" (superadmin-only) — not `.env`. With
+nothing configured (the local dev default), reset links and communications
+are printed to the server console instead of sent — good enough to test the
+flow, not for real members. Before relying on this for real members, fill
+in the host/port/username/password/from-address there with any SMTP
 provider (Gmail app password, SendGrid, Resend, Mailgun, Postmark — all
-work), and set `PORTAL_URL` to the real portal URL so reset links point
+work), use "Send a Test Email" to confirm it actually works, and set
+`PORTAL_URL` in `.env` to the real portal URL so reset links point
 somewhere reachable.
 
 **Remaining gap:** members added manually by the board (not via public
@@ -264,6 +268,9 @@ dashboard) to point at the real API URL.
 | POST | `/api/membership-categories` | admin/board | Add a membership category |
 | PUT | `/api/membership-categories/:id` | admin/board | Edit a category's label/dues/order/active state |
 | DELETE | `/api/membership-categories/:id` | admin/board | Remove a category (blocked if any member still has it) |
+| GET | `/api/mail-settings` | **superadmin** | Current SMTP config (password never included, only whether one is set) |
+| PUT | `/api/mail-settings` | **superadmin** | Update SMTP config; omit `password` to leave it unchanged |
+| POST | `/api/mail-settings/test` | **superadmin** (rate-limited) | Send a real test email through the saved settings |
 | GET | `/api/communications/recipient-count` | admin/board | Preview how many members match a filter |
 | POST | `/api/communications/send` | admin/board (rate-limited) | Email members matching a filter |
 | GET | `/api/reports/summary` | admin/board | Aggregate membership stats |
@@ -334,6 +341,9 @@ are not interchangeable — each only works against its own set of routes.
   above.
 - `payment_page_content` — singleton row (heading/intro/instructions text)
   for the public payment page.
+- `mail_settings` — singleton row for SMTP config (see "Mail server
+  settings" above); `smtp_pass_encrypted` holds the password
+  AES-256-GCM-encrypted, never in plain text.
 - `payments` — one row per Square checkout attempt: member, `purpose`
   (membership/event), amount, `status` (pending/completed/failed/cancelled),
   and the Square order/payment-link/payment IDs used to match incoming
@@ -419,6 +429,38 @@ and POST it to `/api/payments/webhook` with an `x-square-hmacsha256-signature`
 header. What you *can't* test without real Sandbox credentials is
 `/api/payments/checkout` actually reaching Square — it fails with a clear
 "Square isn't configured yet" error until `SQUARE_ACCESS_TOKEN` is set.
+
+## Mail server settings
+
+SMTP is configured from `../admin/` → "Admin Logins" → "Mail Server
+Settings", not `.env` — this is the one piece of third-party-service
+configuration that lives in the database instead of environment
+variables, so a super admin can set it (or rotate the password) without
+server access. Superadmin-only, same sensitivity tier as managing other
+admin logins on that same tab.
+
+- `GET/PUT /api/mail-settings` (superadmin) — read/update host, port,
+  username, from-address, and SSL/TLS flag. `PUT`'s `password` field is
+  optional: omit it (or send an empty string) to leave the currently
+  stored password untouched, so re-saving the other fields doesn't force
+  re-entering it every time.
+- `POST /api/mail-settings/test` (superadmin, rate-limited) — sends a real
+  test email through the already-saved settings, so you can confirm SMTP
+  actually works without waiting for a real password reset or
+  communications send.
+- The password is never returned by `GET` — only a `has_password` boolean.
+  It's encrypted at rest (`src/crypto.js`, AES-256-GCM) using `ENCRYPTION_KEY`
+  from `.env`, decrypted only in-memory at the moment `src/email.js` builds
+  a transporter to actually send. `ENCRYPTION_KEY` must be set for the
+  password field to work at all — losing or changing that key makes any
+  already-stored encrypted password undecryptable, requiring it to be
+  re-entered from the dashboard.
+- `src/email.js`'s `sendEmail()` reads settings from the database fresh on
+  every call (not cached at boot), so a settings change takes effect on
+  the very next email — no restart needed. With no host configured, it
+  falls back to logging the would-be email to the server console, same as
+  the previous `.env`-based version did — the local-dev experience is
+  unchanged, just the source of truth moved.
 
 ## Event flyers + past events
 
@@ -643,7 +685,9 @@ switch.
 - [ ] Update `../admin/js/config.js` to point at the deployed API URL.
 - [ ] Put the API behind HTTPS.
 - [ ] Consider adding automated backups for the database.
-- [ ] Rotate `JWT_SECRET` from the local dev value before going live.
+- [ ] Rotate `JWT_SECRET` and `ENCRYPTION_KEY` from the local dev values
+      before going live (rotating `ENCRYPTION_KEY` after mail settings are
+      already saved means re-entering the SMTP password from the dashboard).
 - [ ] Switch Square to production credentials and a production webhook
       subscription (see above) — sandbox payments aren't real money.
 - [ ] Update `../js/config.js` and `../portal/js/config.js` to point at the
