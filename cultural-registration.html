@@ -31,6 +31,13 @@
   .cr-total-box{ background:#fff; border-radius:var(--radius-sm); padding:1rem 1.1rem; margin-top:1rem; border:1px solid color-mix(in srgb, var(--rule) 20%, transparent); }
   .cr-total-row{ display:flex; align-items:center; justify-content:space-between; font-size:1.1rem; }
   .cr-total-row strong{ color:var(--maroon); font-size:1.3rem; }
+  .cr-review-row{
+    display:flex; align-items:center; justify-content:space-between; gap:.75rem;
+    padding:.6rem 0; border-bottom:1px solid color-mix(in srgb, var(--rule) 15%, transparent);
+  }
+  .cr-review-row:last-child{ border-bottom:none; }
+  .cr-review-row .cr-review-name{ font-weight:600; }
+  .cr-review-row .cr-review-tier{ font-size:.82rem; color:var(--text-soft); }
 </style>
 </head>
 <body>
@@ -108,8 +115,27 @@
       </div>
 
       <div id="cf-error" class="form-note" style="color:var(--maroon); display:none; margin-top:1rem;"></div>
-      <button type="submit" class="btn btn-primary" id="cf-submit-btn" style="width:100%; margin-top:1.5rem;">Register &amp; Pay</button>
+      <button type="submit" class="btn btn-primary" id="cf-submit-btn" style="width:100%; margin-top:1.5rem;">Continue to Checkout</button>
     </form>
+
+    <div id="cf-review" class="instructions-card" style="display:none;">
+      <span class="eyebrow">Step 2 of 2</span>
+      <h2 style="margin:.3rem 0 .25rem;">Review &amp; Pay</h2>
+      <p class="cr-fee-note" id="cf-review-summary"></p>
+
+      <div class="cr-section-title">Participants</div>
+      <div id="cf-review-rows"></div>
+
+      <div class="cr-total-box">
+        <div class="cr-total-row"><span>Total to pay</span><strong id="cf-review-total">$0.00</strong></div>
+      </div>
+
+      <div id="cf-review-error" class="form-note" style="color:var(--maroon); display:none; margin-top:1rem;"></div>
+      <div style="display:flex; gap:.75rem; margin-top:1.5rem;">
+        <button type="button" class="btn btn-outline-dark" id="cf-review-back-btn">Back to Edit</button>
+        <button type="button" class="btn btn-primary" id="cf-review-pay-btn" style="flex:1;">Confirm &amp; Pay</button>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -235,6 +261,11 @@
 
   addParticipantRow();
 
+  var pendingPayload = null;
+
+  // Step 1: build the registration payload and ask the server for the real,
+  // per-participant total (actual membership status, not the estimate the
+  // form shows while typing) — nothing is created yet.
   document.getElementById("cultural-form").addEventListener("submit", async function (e) {
     e.preventDefault();
     var errorBox = document.getElementById("cf-error");
@@ -254,7 +285,7 @@
       return;
     }
 
-    var payload = {
+    pendingPayload = {
       event_id: document.getElementById("cf-event").value,
       group_name: document.getElementById("cf-group-name").value.trim(),
       choreographer_name: document.getElementById("cf-choreographer-name").value.trim(),
@@ -267,12 +298,63 @@
 
     var btn = document.getElementById("cf-submit-btn");
     btn.disabled = true;
+    btn.textContent = "Checking price…";
+    try {
+      var res = await fetch(window.RITS_API_BASE + "/cultural-groups/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: pendingPayload.event_id, participants: pendingPayload.participants }),
+      });
+      var quote = await res.json();
+      if (!res.ok) throw new Error(quote.error || "Couldn't calculate the total");
+      showReview(quote);
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = "";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Continue to Checkout";
+    }
+  });
+
+  function showReview(quote) {
+    document.getElementById("cf-review-summary").textContent =
+      pendingPayload.group_name + " — " + quote.event_name + " (" + quote.participants.length + (quote.participants.length === 1 ? " participant" : " participants") + ")";
+    document.getElementById("cf-review-rows").innerHTML = quote.participants.map(function (p) {
+      return (
+        '<div class="cr-review-row">' +
+        '<span class="cr-review-name">' + escapeHtml(p.full_name) + '<br><span class="cr-review-tier">' + (p.is_member ? "RITS member" : "Non-member") + "</span></span>" +
+        "<span>" + fmtMoney(p.fee_cents) + "</span>" +
+        "</div>"
+      );
+    }).join("");
+    document.getElementById("cf-review-total").textContent = fmtMoney(quote.total_cents);
+    document.getElementById("cf-review-pay-btn").textContent = quote.total_cents === 0 ? "Confirm Registration" : "Confirm & Pay";
+
+    document.getElementById("cultural-form").style.display = "none";
+    document.getElementById("cf-review").style.display = "";
+    window.scrollTo({ top: document.getElementById("cf-review").offsetTop - 24, behavior: "smooth" });
+  }
+
+  document.getElementById("cf-review-back-btn").addEventListener("click", function () {
+    document.getElementById("cf-review").style.display = "none";
+    document.getElementById("cultural-form").style.display = "";
+  });
+
+  // Step 2: the choreographer has seen the real total — now actually create
+  // the registration (and, if it's not free, redirect to Square).
+  document.getElementById("cf-review-pay-btn").addEventListener("click", async function () {
+    var errorBox = document.getElementById("cf-review-error");
+    errorBox.style.display = "none";
+    var btn = this;
+    var originalLabel = btn.textContent;
+    btn.disabled = true;
     btn.textContent = "Submitting…";
     try {
       var res = await fetch(window.RITS_API_BASE + "/cultural-groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(pendingPayload),
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
@@ -286,7 +368,7 @@
       errorBox.textContent = err.message;
       errorBox.style.display = "";
       btn.disabled = false;
-      btn.textContent = "Register & Pay";
+      btn.textContent = originalLabel;
     }
   });
 </script>

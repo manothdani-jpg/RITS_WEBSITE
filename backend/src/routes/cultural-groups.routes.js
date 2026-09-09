@@ -45,13 +45,102 @@ const submitLimiter = rateLimit({
   message: { error: "Too many registration attempts. Please try again later." },
 });
 
+// A lighter limit for pricing lookups — same window, more headroom, since a
+// choreographer may re-check the total a few times while editing the group
+// before actually submitting.
+const quoteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many pricing checks. Please try again later." },
+});
+
+function validateParticipants(participants) {
+  if (!Array.isArray(participants) || !participants.length) {
+    return "At least one participant is required";
+  }
+  if (participants.length > 100) {
+    return "That's too many participants for one submission — please contact the board.";
+  }
+  for (const p of participants) {
+    if (!p || !p.full_name || typeof p.full_name !== "string" || !p.full_name.trim()) {
+      return "Each participant needs a full name";
+    }
+    if (!AGE_CATEGORIES.includes(p.age_category)) {
+      return `Each participant's age category must be one of: ${AGE_CATEGORIES.join(", ")}`;
+    }
+    if (p.email && !EMAIL_RE.test(p.email)) {
+      return `"${p.email}" isn't a valid email address`;
+    }
+  }
+  return null;
+}
+
+// Looks up each participant's membership by email (if given) and prices
+// them at the event's flat cultural member/non-member rate accordingly.
+async function resolveParticipantFees(event, participants) {
+  let amountCents = 0;
+  const resolved = [];
+  for (const p of participants) {
+    let memberRow = null;
+    if (p.email) {
+      const found = await db.query("SELECT id, payment_status FROM members WHERE email = $1", [p.email]);
+      memberRow = found.rows[0] || null;
+    }
+    const isMember = !!(memberRow && memberRow.payment_status === "paid");
+    const feeCents = isMember ? event.cultural_member_fee_cents : event.cultural_non_member_fee_cents;
+    amountCents += feeCents;
+    resolved.push({
+      full_name: p.full_name.trim(),
+      email: p.email || null,
+      age_category: p.age_category,
+      member_id: memberRow ? memberRow.id : null,
+      is_member: isMember,
+      fee_cents: feeCents,
+    });
+  }
+  return { resolved, amountCents };
+}
+
+// POST /api/cultural-groups/quote — public: resolves the actual per-participant
+// fees (real membership status, not the flat non-member estimate the form
+// shows while typing) without creating anything, so the registration page can
+// show the real total on a review step before the choreographer commits to
+// checkout.
+router.post("/quote", quoteLimiter, async (req, res) => {
+  const { event_id, participants } = req.body || {};
+  if (!event_id) return res.status(400).json({ error: "event_id is required" });
+
+  const participantError = validateParticipants(participants);
+  if (participantError) return res.status(400).json({ error: participantError });
+
+  const eventResult = await db.query(
+    "SELECT id, name, cultural_member_fee_cents, cultural_non_member_fee_cents FROM events WHERE id = $1",
+    [event_id]
+  );
+  const event = eventResult.rows[0];
+  if (!event) return res.status(404).json({ error: "Event not found" });
+  if (event.cultural_member_fee_cents === null || event.cultural_non_member_fee_cents === null) {
+    return res.status(400).json({ error: "Cultural group registration isn't open for this event." });
+  }
+
+  const { resolved, amountCents } = await resolveParticipantFees(event, participants);
+  res.json({
+    event_name: event.name,
+    participants: resolved.map((p) => ({ full_name: p.full_name, is_member: p.is_member, fee_cents: p.fee_cents })),
+    total_cents: amountCents,
+  });
+});
+
 /* ============================================================
    POST /api/cultural-groups — public: a choreographer/trainer
    registers a performance group with N participants. Each
    participant's membership is checked by email (if given) and their
    fee is set to the event's member/non-member cultural fee
    accordingly. Pays via Square for the group's total, unless the
-   event's cultural fees are both $0.
+   event's cultural fees are both $0. Call /quote first to show the
+   choreographer the real total before they commit to this.
    ============================================================ */
 router.post("/", submitLimiter, async (req, res) => {
   const {
@@ -68,23 +157,8 @@ router.post("/", submitLimiter, async (req, res) => {
   if (!PERFORMANCE_TYPES.includes(performance_type)) {
     return res.status(400).json({ error: `performance_type must be one of: ${PERFORMANCE_TYPES.join(", ")}` });
   }
-  if (!Array.isArray(participants) || !participants.length) {
-    return res.status(400).json({ error: "At least one participant is required" });
-  }
-  if (participants.length > 100) {
-    return res.status(400).json({ error: "That's too many participants for one submission — please contact the board." });
-  }
-  for (const p of participants) {
-    if (!p || !p.full_name || typeof p.full_name !== "string" || !p.full_name.trim()) {
-      return res.status(400).json({ error: "Each participant needs a full name" });
-    }
-    if (!AGE_CATEGORIES.includes(p.age_category)) {
-      return res.status(400).json({ error: `Each participant's age category must be one of: ${AGE_CATEGORIES.join(", ")}` });
-    }
-    if (p.email && !EMAIL_RE.test(p.email)) {
-      return res.status(400).json({ error: `"${p.email}" isn't a valid email address` });
-    }
-  }
+  const participantError = validateParticipants(participants);
+  if (participantError) return res.status(400).json({ error: participantError });
 
   try {
     const eventResult = await db.query(
@@ -115,27 +189,7 @@ router.post("/", submitLimiter, async (req, res) => {
       choreographer = created.rows[0];
     }
 
-    // Resolve each participant's membership + fee.
-    let amountCents = 0;
-    const resolved = [];
-    for (const p of participants) {
-      let memberRow = null;
-      if (p.email) {
-        const found = await db.query("SELECT id, payment_status FROM members WHERE email = $1", [p.email]);
-        memberRow = found.rows[0] || null;
-      }
-      const isMember = !!(memberRow && memberRow.payment_status === "paid");
-      const feeCents = isMember ? event.cultural_member_fee_cents : event.cultural_non_member_fee_cents;
-      amountCents += feeCents;
-      resolved.push({
-        full_name: p.full_name.trim(),
-        email: p.email || null,
-        age_category: p.age_category,
-        member_id: memberRow ? memberRow.id : null,
-        is_member: isMember,
-        fee_cents: feeCents,
-      });
-    }
+    const { resolved, amountCents } = await resolveParticipantFees(event, participants);
 
     const groupStatus = amountCents === 0 ? "registered" : "pending_payment";
     const groupResult = await db.query(
