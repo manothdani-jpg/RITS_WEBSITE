@@ -5,7 +5,9 @@ uploads/gallery/*
 uploads/sponsors/*
 uploads/board/*
 uploads/events/*
+db/backups/*
 !uploads/gallery/.gitkeep
 !uploads/sponsors/.gitkeep
 !uploads/board/.gitkeep
 !uploads/events/.gitkeep
+!db/backups/.gitkeep

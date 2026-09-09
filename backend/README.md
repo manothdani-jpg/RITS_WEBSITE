@@ -171,6 +171,31 @@ npm run dev      # auto-restarts on file changes
 
 The API listens on `http://localhost:4000` by default (`PORT` in `.env`).
 
+## Database backups
+
+```bash
+# Dump the database (DATABASE_URL from .env) to a timestamped file
+npm run db:backup
+
+# Restore a backup — DESTRUCTIVE, replaces everything in DATABASE_URL
+npm run db:restore -- db/backups/rits-<timestamp>.dump
+```
+
+`npm run db:backup` writes a compressed `pg_dump` file to `db/backups/`
+(e.g. `rits-20260909-143000.dump`) and automatically prunes old backups,
+keeping the 14 most recent. Backups are gitignored (only `db/backups/.gitkeep`
+is tracked) because dump files contain real member PII — never commit one.
+
+`npm run db:restore -- <path-to-backup.dump>` restores a backup with
+`pg_restore --clean --if-exists`, which drops and recreates every object in
+the target database first. It prompts for a typed `yes` confirmation before
+doing anything, since it replaces the entire database. Only run it against a
+database you intend to overwrite — never as a "test" against real data.
+
+These scripts are local tooling, not a scheduled job — see the "Before
+deploying to production" checklist below for making backups happen
+automatically.
+
 ## Using the admin dashboard
 
 Open `../admin/index.html` (served over HTTP, not `file://` — e.g. via the
@@ -853,7 +878,10 @@ switch.
       URLs — used to build the redirect links after Square checkouts.
 - [ ] Update `../admin/js/config.js` to point at the deployed API URL.
 - [ ] Put the API behind HTTPS.
-- [ ] Consider adding automated backups for the database.
+- [ ] Enable your host's automated Postgres backups (Render, Railway, Fly.io,
+      and most managed Postgres providers offer this) — don't rely solely on
+      running `npm run db:backup` by hand. If self-hosting, schedule it via
+      cron/launchd instead.
 - [ ] Rotate `JWT_SECRET` and `ENCRYPTION_KEY` from the local dev values
       before going live (rotating `ENCRYPTION_KEY` after mail settings are
       already saved means re-entering the SMTP password from the dashboard).

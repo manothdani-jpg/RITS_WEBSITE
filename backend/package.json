@@ -9,7 +9,9 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "db:migrate": "psql \"$DATABASE_URL\" -f db/schema.sql",
-    "db:seed": "node db/seed.js"
+    "db:seed": "node db/seed.js",
+    "db:backup": "bash db/backup.sh",
+    "db:restore": "bash db/restore.sh"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
