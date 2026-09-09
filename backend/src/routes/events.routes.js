@@ -121,14 +121,13 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { name, description, event_date, location } = req.body || {};
+  if (!name || !event_date) {
+    return res.status(400).json({ error: "name and event_date are required" });
+  }
   const { rows } = await db.query(
-    `UPDATE events SET
-       name = COALESCE($1, name),
-       description = COALESCE($2, description),
-       event_date = COALESCE($3, event_date),
-       location = COALESCE($4, location)
+    `UPDATE events SET name = $1, description = $2, event_date = $3, location = $4
      WHERE id = $5 RETURNING *`,
-    [name, description, event_date, location, req.params.id]
+    [name, description || null, event_date, location || null, req.params.id]
   );
   if (!rows[0]) return res.status(404).json({ error: "Event not found" });
   res.json({ event: rows[0] });

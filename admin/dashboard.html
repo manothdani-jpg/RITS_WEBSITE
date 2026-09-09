@@ -132,7 +132,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Flyer</th><th>Event</th><th>Date</th><th>Location</th><th>RSVPs</th><th></th></tr>
+            <tr><th>Flyer</th><th>Event</th><th>Date</th><th>Location</th><th>Cultural</th><th>RSVPs</th><th></th></tr>
           </thead>
           <tbody id="events-tbody"></tbody>
         </table>
@@ -649,23 +649,24 @@
   </div>
 </div>
 
-<!-- ==================== Event modal (add) ==================== -->
+<!-- ==================== Event modal (add/edit) ==================== -->
 <div class="modal-backdrop" id="event-modal">
   <div class="modal" style="width:min(100%,460px);">
     <div class="modal-head">
-      <h2>Add Event</h2>
+      <h2 id="event-modal-title">Add Event</h2>
       <button class="modal-close" id="event-modal-close" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
     <form id="event-form">
+      <input type="hidden" id="ev-id">
       <div class="form-row"><label for="ev-name">Event name</label><input id="ev-name" required></div>
       <div class="form-row"><label for="ev-date">Date &amp; time</label><input type="datetime-local" id="ev-date" required></div>
       <div class="form-row"><label for="ev-location">Location</label><input id="ev-location"></div>
       <div class="form-row"><label for="ev-description">Description</label><textarea id="ev-description" rows="3"></textarea></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline-dark btn-sm" id="event-cancel-btn">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm">Create Event</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="event-submit-btn">Create Event</button>
       </div>
     </form>
   </div>

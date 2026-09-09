@@ -408,11 +408,38 @@
   var eventModal = document.getElementById("event-modal");
   var eventForm = document.getElementById("event-form");
 
-  document.getElementById("add-event-btn").addEventListener("click", function () { eventModal.classList.add("is-open"); });
+  document.getElementById("add-event-btn").addEventListener("click", function () { openEventModal(); });
   document.getElementById("event-modal-close").addEventListener("click", closeEventModal);
   document.getElementById("event-cancel-btn").addEventListener("click", closeEventModal);
   eventModal.addEventListener("click", function (e) { if (e.target === eventModal) closeEventModal(); });
   function closeEventModal() { eventModal.classList.remove("is-open"); eventForm.reset(); }
+
+  // Local (not UTC) datetime-local input value, so editing an event doesn't
+  // shift its displayed time.
+  function toDatetimeLocalValue(isoString) {
+    var d = new Date(isoString);
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function openEventModal(id) {
+    eventForm.reset();
+    document.getElementById("ev-id").value = id || "";
+    if (id) {
+      var ev = allEvents.find(function (e) { return e.id === id; });
+      if (!ev) return;
+      document.getElementById("event-modal-title").textContent = "Edit Event";
+      document.getElementById("event-submit-btn").textContent = "Save Changes";
+      document.getElementById("ev-name").value = ev.name;
+      document.getElementById("ev-date").value = toDatetimeLocalValue(ev.event_date);
+      document.getElementById("ev-location").value = ev.location || "";
+      document.getElementById("ev-description").value = ev.description || "";
+    } else {
+      document.getElementById("event-modal-title").textContent = "Add Event";
+      document.getElementById("event-submit-btn").textContent = "Create Event";
+    }
+    eventModal.classList.add("is-open");
+  }
 
   async function loadEvents() {
     try {
@@ -429,8 +456,12 @@
           "<td>" + escapeHtml(ev.name) + "</td>" +
           "<td>" + fmtDateTime(ev.event_date) + "</td>" +
           "<td>" + escapeHtml(ev.location || "—") + "</td>" +
+          "<td>" + (ev.cultural_member_fee_cents != null && ev.cultural_non_member_fee_cents != null
+            ? '<span class="badge badge-paid">Open</span>'
+            : '<span class="badge badge-tier">Closed</span>') + "</td>" +
           "<td>" + rsvps.rsvps.length + "</td>" +
           '<td class="row-actions">' +
+          '<button class="icon-btn" data-edit-event="' + ev.id + '" aria-label="Edit ' + escapeHtml(ev.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>' +
           '<button class="icon-btn" data-manage-flyer="' + ev.id + '" data-event-name="' + escapeHtml(ev.name) + '" aria-label="Manage flyer for ' + escapeHtml(ev.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>' +
           '<button class="icon-btn" data-view-attendees="' + ev.id + '" data-event-name="' + escapeHtml(ev.name) + '" aria-label="View attendees for ' + escapeHtml(ev.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>' +
           '<button class="icon-btn" data-manage-pricing="' + ev.id + '" data-event-name="' + escapeHtml(ev.name) + '" aria-label="Manage pricing for ' + escapeHtml(ev.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></button>' +
@@ -445,10 +476,16 @@
   }
 
   eventsTbody.addEventListener("click", async function (e) {
+    var editBtn = e.target.closest("[data-edit-event]");
     var delBtn = e.target.closest("[data-del-event]");
     var pricingBtn = e.target.closest("[data-manage-pricing]");
     var attendeesBtn = e.target.closest("[data-view-attendees]");
     var flyerBtn = e.target.closest("[data-manage-flyer]");
+
+    if (editBtn) {
+      openEventModal(editBtn.getAttribute("data-edit-event"));
+      return;
+    }
 
     if (flyerBtn) {
       openFlyerModal(flyerBtn.getAttribute("data-manage-flyer"), flyerBtn.getAttribute("data-event-name"));
@@ -718,6 +755,7 @@
 
   eventForm.addEventListener("submit", async function (e) {
     e.preventDefault();
+    var id = document.getElementById("ev-id").value;
     var payload = {
       name: document.getElementById("ev-name").value.trim(),
       event_date: new Date(document.getElementById("ev-date").value).toISOString(),
@@ -725,8 +763,13 @@
       description: document.getElementById("ev-description").value.trim() || null,
     };
     try {
-      await api("/events", { method: "POST", body: payload });
-      toast("Event created");
+      if (id) {
+        await api("/events/" + id, { method: "PUT", body: payload });
+        toast("Event updated");
+      } else {
+        await api("/events", { method: "POST", body: payload });
+        toast("Event created");
+      }
       closeEventModal();
       loadEvents();
     } catch (err) {
