@@ -304,6 +304,7 @@
 
   /* ---------------- Events / RSVPs ---------------- */
   var pricingByEvent = {}; // event_id -> [options]
+  var attendeesByEvent = {}; // event_id -> { total_count, rsvp_count, attendees }
 
   async function renderEvents() {
     var host = document.getElementById("events-list");
@@ -321,13 +322,19 @@
     }
 
     await Promise.all(allEvents.map(async function (ev) {
-      if (pricingByEvent[ev.id]) return;
+      if (!pricingByEvent[ev.id]) {
+        try {
+          var res = await fetch(API + "/events/" + ev.id + "/pricing");
+          var d = await res.json();
+          pricingByEvent[ev.id] = d.options || [];
+        } catch (err) {
+          pricingByEvent[ev.id] = [];
+        }
+      }
       try {
-        var res = await fetch(API + "/events/" + ev.id + "/pricing");
-        var d = await res.json();
-        pricingByEvent[ev.id] = d.options || [];
+        attendeesByEvent[ev.id] = await api("/events/" + ev.id + "/attendees");
       } catch (err) {
-        pricingByEvent[ev.id] = [];
+        attendeesByEvent[ev.id] = null;
       }
     }));
 
@@ -341,6 +348,26 @@
         ? renderPricedEventRow(ev, options, rsvp)
         : renderFreeEventRow(ev, rsvp);
     }).join("");
+  }
+
+  // Shared "N going" count + expandable name list, used by both the free and
+  // priced event row renderers.
+  function renderAttendeesSummary(ev) {
+    var info = attendeesByEvent[ev.id];
+    if (!info || !info.rsvp_count) {
+      return '<p class="attendees-summary">No one has RSVP\'d yet — be the first!</p>';
+    }
+    var countText = info.total_count + (info.total_count === 1 ? " person going" : " people going");
+    var names = info.attendees.map(function (a) {
+      var name = escapeHtml(a.first_name + " " + a.last_name);
+      return a.guest_count ? name + " (+" + a.guest_count + ")" : name;
+    }).join(", ");
+    return (
+      '<details class="attendees-summary">' +
+      "<summary>" + countText + "</summary>" +
+      '<p class="attendees-list">' + names + "</p>" +
+      "</details>"
+    );
   }
 
   function flyerThumb(ev) {
@@ -358,6 +385,7 @@
       "<div>" +
       "<h3>" + escapeHtml(ev.name) + "</h3>" +
       '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
+      renderAttendeesSummary(ev) +
       "</div>" +
       "</div>" +
       '<div class="actions">' +
@@ -418,6 +446,7 @@
         "<div>" +
         "<h3>" + escapeHtml(ev.name) + "</h3>" +
         '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
+        renderAttendeesSummary(ev) +
         "</div>" +
         "</div>" +
         '<span class="badge badge-paid">Registered &middot; ' + fmtMoney(rsvp.amount_cents) + " paid</span>" +
@@ -426,25 +455,26 @@
         "</div>"
       );
     }
-    if (rsvp && rsvp.status === "pending_payment") {
-      return (
-        '<div class="event-row">' +
-        '<div style="display:flex; align-items:center;">' +
-        flyerThumb(ev) +
-        "<div>" +
-        "<h3>" + escapeHtml(ev.name) + "</h3>" +
-        '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
-        "</div>" +
-        "</div>" +
-        '<span class="badge badge-pending">Payment pending</span>' +
-        "</div>"
-      );
+    // Not paid yet — selections can still be changed. Re-submitting to
+    // /payments/event-checkout upserts this same RSVP, so the "unpaid" and
+    // "editing a pending registration" cases share the same selection form
+    // and button; only the copy and the presence of a Cancel option differ.
+    var isPending = rsvp && rsvp.status === "pending_payment";
+
+    var selectedParticipationId = null;
+    var selectedAddonQty = {};
+    if (isPending) {
+      (rsvp.selections || []).forEach(function (s) {
+        if (s.kind === "participation") selectedParticipationId = s.pricing_option_id;
+        else selectedAddonQty[s.pricing_option_id] = s.quantity;
+      });
     }
 
     var participationHtml = participationOptions.length
       ? participationOptions.map(function (o, i) {
+          var checked = selectedParticipationId ? o.id === selectedParticipationId : i === 0;
           return (
-            '<label class="pricing-choice"><input type="radio" name="participation-' + ev.id + '" value="' + o.id + '" data-price-event="' + ev.id + '"' + (i === 0 ? " checked" : "") + '> ' +
+            '<label class="pricing-choice"><input type="radio" name="participation-' + ev.id + '" value="' + o.id + '" data-price-event="' + ev.id + '"' + (checked ? " checked" : "") + '> ' +
             escapeHtml(o.label) + " — " + fmtMoney(priceFor(o)) + "</label>"
           );
         }).join("")
@@ -452,11 +482,12 @@
 
     var addonHtml = addonOptions.length
       ? '<div class="pricing-addons">' + addonOptions.map(function (o) {
+          var qty = selectedAddonQty[o.id];
           return (
             '<label class="pricing-choice">' +
-            '<input type="checkbox" data-addon-check="' + o.id + '" data-addon-event="' + ev.id + '" data-price-event="' + ev.id + '"> ' +
+            '<input type="checkbox" data-addon-check="' + o.id + '" data-addon-event="' + ev.id + '" data-price-event="' + ev.id + '"' + (qty ? " checked" : "") + '> ' +
             escapeHtml(o.label) + " — " + fmtMoney(priceFor(o)) + " each " +
-            '<input type="number" min="1" max="20" value="1" class="addon-qty" data-addon-qty="' + o.id + '" data-price-event="' + ev.id + '" disabled>' +
+            '<input type="number" min="1" max="20" value="' + (qty || 1) + '" class="addon-qty" data-addon-qty="' + o.id + '" data-price-event="' + ev.id + '"' + (qty ? "" : " disabled") + ">" +
             "</label>"
           );
         }).join("") + "</div>"
@@ -466,6 +497,13 @@
       ? '<p class="empty-note" style="margin:.35rem 0 0;">Non-member pricing applies — pay your dues for member pricing.</p>'
       : "";
 
+    var initialTotal = 0;
+    var initialParticipationOption = selectedParticipationId
+      ? participationOptions.find(function (o) { return o.id === selectedParticipationId; })
+      : participationOptions[0];
+    if (initialParticipationOption) initialTotal += priceFor(initialParticipationOption);
+    addonOptions.forEach(function (o) { if (selectedAddonQty[o.id]) initialTotal += priceFor(o) * selectedAddonQty[o.id]; });
+
     return (
       '<div class="event-row priced-event-row" data-priced-event="' + ev.id + '">' +
       "<div style=\"width:100%;\">" +
@@ -474,10 +512,18 @@
       "<h3 style=\"margin:0;\">" + escapeHtml(ev.name) + "</h3>" +
       "</div>" +
       '<div class="meta">' + fmtDateTime(ev.event_date) + (ev.location ? " &middot; " + escapeHtml(ev.location) : "") + "</div>" +
+      renderAttendeesSummary(ev) +
+      (isPending
+        ? '<span class="badge badge-pending">Payment pending</span>' +
+          '<p class="empty-note" style="margin:.35rem 0 0;">You haven\'t paid yet — change your choices below if needed, then pay to confirm.</p>'
+        : "") +
       '<div class="pricing-selections">' + participationHtml + addonHtml + "</div>" +
       nonMemberNotice +
-      '<div class="pricing-total">Total: <strong data-price-total="' + ev.id + '">' + fmtMoney(participationOptions[0] ? priceFor(participationOptions[0]) : 0) + "</strong></div>" +
-      '<button class="btn btn-primary btn-sm" data-register-pay="' + ev.id + '" style="margin-top:.5rem;">Register &amp; Pay</button>' +
+      '<div class="pricing-total">Total: <strong data-price-total="' + ev.id + '">' + fmtMoney(initialTotal) + "</strong></div>" +
+      '<div style="display:flex; gap:.5rem; margin-top:.5rem;">' +
+      '<button class="btn btn-primary btn-sm" data-register-pay="' + ev.id + '">' + (isPending ? "Update &amp; Pay" : "Register &amp; Pay") + "</button>" +
+      (isPending ? '<button type="button" class="btn btn-outline-dark btn-sm" data-cancel-rsvp="' + ev.id + '">Cancel</button>' : "") +
+      "</div>" +
       "</div></div>"
     );
   }
@@ -644,6 +690,7 @@
 
     if (registerBtn) {
       var pricedEventId = registerBtn.getAttribute("data-register-pay");
+      var registerBtnLabel = registerBtn.textContent;
       registerBtn.disabled = true;
       registerBtn.textContent = "Redirecting…";
 
@@ -671,7 +718,7 @@
       } catch (err) {
         toast(err.message, true);
         registerBtn.disabled = false;
-        registerBtn.textContent = "Register & Pay";
+        registerBtn.textContent = registerBtnLabel;
       }
     }
   });

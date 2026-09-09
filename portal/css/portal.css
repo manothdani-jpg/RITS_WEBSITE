@@ -115,6 +115,10 @@ body{ background:var(--cream); min-height:100vh; }
 .pricing-total{ font-size:.95rem; color:var(--text-strong); }
 .pricing-total strong{ color:var(--maroon); }
 
+.attendees-summary{ font-size:.82rem; color:var(--text-soft); margin:.3rem 0 0; }
+details.attendees-summary > summary{ cursor:pointer; }
+.attendees-list{ margin:.35rem 0 0; }
+
 .empty-note{ color:var(--text-soft); font-size:.88rem; padding:1rem 0; }
 
 .toast{

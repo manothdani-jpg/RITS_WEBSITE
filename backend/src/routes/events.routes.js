@@ -2,7 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const db = require("../db");
-const { requireAdmin } = require("../middleware/auth");
+const { requireAdmin, requireMember } = require("../middleware/auth");
 const { makeUploader, UPLOADS_ROOT } = require("../upload");
 
 const router = express.Router();
@@ -30,6 +30,27 @@ router.get("/:id/pricing", async (req, res) => {
     [req.params.id]
   );
   res.json({ options: rows });
+});
+
+// GET /api/events/:id/attendees — member-facing headcount + first/last
+// names of who's coming, so members can see who else is going. Includes
+// both 'registered' and 'attended' (already checked in at the door) RSVPs;
+// unlike the admin /rsvps endpoint, this omits email/phone and
+// pending/cancelled/no-show RSVPs.
+router.get("/:id/attendees", requireMember, async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT m.first_name, m.last_name, r.guest_count
+     FROM rsvps r JOIN members m ON m.id = r.member_id
+     WHERE r.event_id = $1 AND r.status IN ('registered', 'attended')
+     ORDER BY r.created_at`,
+    [req.params.id]
+  );
+  const guestTotal = rows.reduce((sum, r) => sum + (r.guest_count || 0), 0);
+  res.json({
+    total_count: rows.length + guestTotal,
+    rsvp_count: rows.length,
+    attendees: rows.map((r) => ({ first_name: r.first_name, last_name: r.last_name, guest_count: r.guest_count })),
+  });
 });
 
 /* ---------------- Admin-only below ---------------- */
