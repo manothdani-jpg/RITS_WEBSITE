@@ -163,6 +163,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
   background:var(--gold); transition:right .2s ease;
 }
 .nav-links a:hover::after, .nav-links a:focus-visible::after{ right:0; }
+.nav-links .btn{ color:#fff; }
+.nav-links .btn::after{ display:none; }
 
 .nav-toggle{
   display:none; width:44px; height:44px; border-radius:var(--radius-sm);
