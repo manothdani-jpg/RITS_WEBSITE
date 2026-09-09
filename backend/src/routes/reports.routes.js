@@ -189,4 +189,44 @@ router.get("/front-desk", async (req, res) => {
   res.json({ payments: payments.rows, checkins: checkins.rows });
 });
 
+// GET /api/reports/cultural?event_id= — cultural group registration
+// summary: group/participant counts and fee collected/pending, overall
+// and broken down by performance type. event_id is optional.
+router.get("/cultural", async (req, res) => {
+  const eventId = req.query.event_id || null;
+
+  // Participant counts are pre-aggregated to one row per group before
+  // joining, so summing cg.amount_cents afterward doesn't fan out across
+  // each group's participant rows (which would multiply-count the fee).
+  const totals = await db.query(
+    `SELECT
+       COUNT(*)::int AS group_count,
+       COALESCE(SUM(pc.participant_count), 0)::int AS participant_count,
+       COALESCE(SUM(cg.amount_cents) FILTER (WHERE cg.status = 'registered'), 0)::int AS collected_cents,
+       COALESCE(SUM(cg.amount_cents) FILTER (WHERE cg.status = 'pending_payment'), 0)::int AS pending_cents,
+       COUNT(*) FILTER (WHERE cg.status = 'registered')::int AS registered_group_count,
+       COUNT(*) FILTER (WHERE cg.status = 'pending_payment')::int AS pending_group_count
+     FROM cultural_groups cg
+     LEFT JOIN (
+       SELECT group_id, COUNT(*)::int AS participant_count
+       FROM cultural_group_participants
+       GROUP BY group_id
+     ) pc ON pc.group_id = cg.id
+     WHERE cg.status != 'cancelled' AND ($1::uuid IS NULL OR cg.event_id = $1)`,
+    [eventId]
+  );
+
+  const byType = await db.query(
+    `SELECT cg.performance_type, COUNT(DISTINCT cg.id)::int AS group_count, COUNT(p.id)::int AS participant_count
+     FROM cultural_groups cg
+     LEFT JOIN cultural_group_participants p ON p.group_id = cg.id
+     WHERE cg.status != 'cancelled' AND ($1::uuid IS NULL OR cg.event_id = $1)
+     GROUP BY cg.performance_type
+     ORDER BY cg.performance_type`,
+    [eventId]
+  );
+
+  res.json({ totals: totals.rows[0], by_performance_type: byType.rows });
+});
+
 module.exports = router;

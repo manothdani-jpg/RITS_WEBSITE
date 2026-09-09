@@ -157,6 +157,7 @@ psql "$DATABASE_URL" -f db/migrations/019_pillar_content.sql
 psql "$DATABASE_URL" -f db/migrations/020_social_links.sql
 psql "$DATABASE_URL" -f db/migrations/021_mail_settings.sql
 psql "$DATABASE_URL" -f db/migrations/022_front_desk.sql
+psql "$DATABASE_URL" -f db/migrations/023_cultural_groups.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -287,6 +288,13 @@ dashboard) to point at the real API URL.
 | POST | `/api/desk/events/:id/add-items` | desk (rate-limited) | Add more items for someone already registered |
 | PUT | `/api/desk/rsvps/:id/checkin` | desk | Mark attended (or undo) |
 | GET | `/api/reports/front-desk` | admin/board | Every payment/check-in recorded at the door, optionally filtered by event |
+| PUT | `/api/events/:id/cultural-pricing` | admin/board | Set (or clear, to close) an event's member/non-member cultural group fee |
+| POST | `/api/cultural-groups` | — (rate-limited) | Register a performance group with its participants and pay for the group |
+| GET | `/api/cultural-groups/payment-status/:paymentId` | — | Public confirmation-page polling, no login (payment ID is the capability) |
+| GET | `/api/cultural-groups` | admin/board | List group registrations, optionally filtered by event |
+| GET | `/api/cultural-groups/:id` | admin/board | One group's full participant list |
+| DELETE | `/api/cultural-groups/:id` | admin/board | Remove a bad/duplicate group registration |
+| GET | `/api/reports/cultural` | admin/board | Group/participant counts and fees collected/pending, optionally filtered by event |
 | GET | `/api/communications/recipient-count` | admin/board | Preview how many members match a filter |
 | POST | `/api/communications/send` | admin/board (rate-limited) | Email members matching a filter |
 | GET | `/api/reports/summary` | admin/board | Aggregate membership stats |
@@ -364,20 +372,34 @@ are not interchangeable — each only works against its own set of routes.
   settings" above); `smtp_pass_encrypted` holds the password
   AES-256-GCM-encrypted, never in plain text.
 - `payments` — one row per payment attempt (Square or manual): member,
-  `purpose` (membership/event), amount, `method`
+  `purpose` (membership/event/cultural_group), amount, `method`
   (square/cash/venmo/zelle/paypal, defaults `square`), `status`
   (pending/completed/failed/cancelled/refunded), and the Square
   order/payment-link/payment IDs used to match incoming webhooks back to
   this row (unused for manual methods, which go straight to `completed`).
   `tier` is set for membership payments; `event_id`/`rsvp_id` are set for
-  event payments. `recorded_by_desk_staff_id` is set only when front-desk
-  staff took the payment. `pending_selections` is set only for an add-on
-  top-up payment (see "Buying more add-ons" above) — its presence is how
-  `handlePaymentUpdate` tells a top-up apart from the original
+  event payments; `cultural_group_id` is set for cultural group
+  registration payments. `recorded_by_desk_staff_id` is set only when
+  front-desk staff took the payment. `pending_selections` is set only for
+  an add-on top-up payment (see "Buying more add-ons" above) — its
+  presence is how `handlePaymentUpdate` tells a top-up apart from the
+  original
   registration payment.
 - `desk_staff` — front-desk login accounts (see "Front desk" above);
   `is_active = false` blocks login without deleting the account or losing
   its history.
+- `cultural_groups` — one row per group registration submitted at
+  `../cultural-registration.html` (see "Cultural event group registration"
+  above): event, group/performance details, the resolved choreographer
+  member, total `amount_cents`, and `status`
+  (pending_payment/registered/cancelled).
+  `events.cultural_member_fee_cents` / `cultural_non_member_fee_cents`
+  (both `NULL` by default) hold the flat per-participant fee — `NULL`/`NULL`
+  means cultural registration is closed for that event.
+- `cultural_group_participants` — each participant in a group: name,
+  optional email, `age_category` (adult/kid, informational only — doesn't
+  affect fee), the member they were resolved to (if any), an `is_member`
+  snapshot, and their individual `fee_cents`.
 - `site_content` — generic `key`/`value` rows for editable homepage text
   (e.g. `hero.heading`, `about.mission`, `contact.email`) — see "Homepage"
   above.
@@ -687,6 +709,67 @@ member/non-member price and the RSVP's `member_at_registration` — again a
 best-effort estimate, not a guaranteed match to what was actually charged
 if prices were edited since.
 
+## Cultural event group registration
+
+`../cultural-registration.html` is a public form (no login required) where
+a choreographer or trainer registers a performance group — dance,
+singing, drama, speech, or other — for a specific event, listing every
+participant in one submission. It's a genuinely different shape from
+regular event RSVPs: one submission → many people, each individually
+checked against membership and fee-assessed, rather than one person
+registering themselves.
+
+**Enabling it for an event:** `../admin/` → "Events" → the $ icon on any
+event → "Cultural Group Registration Fee" section — set a member fee and
+a non-member fee (per participant, flat — not split further by
+performance type or adult/kid). Leaving both blank (the default) keeps
+cultural registration closed for that event; the public form's event
+picker only ever lists events where both are set, so there's no way to
+land on a form for an event that isn't actually open.
+
+**What the form collects:** group name, performance type, description,
+choreographer/trainer name + email + phone, and a dynamic list of
+participants (full name, optional email, Adult/Kid). The choreographer
+doesn't need to already be a RITS member — like front-desk walk-ins, one
+is created for them on the fly (reusing an existing record if their email
+matches one), so there's always a valid `members` row to hang the
+registration and payment on.
+
+**Fee logic:** membership status only — each participant's fee is their
+event's member or non-member rate, looked up by email against `members`.
+No email, or an email that doesn't match an existing paid member, means
+non-member pricing; Adult vs. Kid is captured for headcount/planning but
+doesn't change the fee (per how this was scoped — could become a second
+axis of pricing later without a major rework, since fee computation is
+centralized in one place in `cultural-groups.routes.js`).
+
+**Payment:** one Square Checkout for the group's total (all participants'
+fees summed, one line item each so the breakdown is visible in Square
+itself), same webhook-confirmed pattern as event/membership payments — see
+`handlePaymentUpdate`'s `cultural_group` branch. A $0 total (event fees
+set to 0/0) skips Square and registers immediately, same as free events.
+On failure, the whole group is marked `cancelled` (there's no partial/
+top-up concept here, unlike event add-ons — a group is submitted once).
+
+**Post-payment confirmation:** unlike the member portal's
+`payment-complete.html` (which requires a member login to poll
+`/api/payments/me`), the choreographer who submitted this form usually
+isn't logged in anywhere. `../cultural-registration-complete.html` polls a
+dedicated public endpoint, `GET /api/cultural-groups/payment-status/:paymentId`,
+instead — safe without auth because the payment ID itself is an
+unguessable UUID handed only to the submitter via the Square redirect (the
+same capability-URL pattern Square's own redirect already relies on), and
+the endpoint returns only what the submitter already entered (group name,
+event name, amount, status) — no participant emails or other PII.
+
+**Admin visibility:** `../admin/` → "Cultural Events" — summary stats
+(groups/participants/collected/pending, excluding cancelled groups) via
+`GET /api/reports/cultural`, a list of every group with participant/member/
+kid counts, and a detail view per group showing the full participant
+list with each one's membership status and fee. A board member can
+delete a bad or duplicate submission; the linked `payments` row (if any)
+is kept for the financial record, its `cultural_group_id` just goes null.
+
 ## Front desk (event-day check-in)
 
 `../frontdesk/` is a fourth, separate app for staffing an event's door —
@@ -766,6 +849,8 @@ switch.
       managed Postgres instance there.
 - [ ] Set real environment variables on the host — never commit `.env`.
 - [ ] Update `CORS_ORIGINS` to your real site domain(s).
+- [ ] Update `SITE_URL` and `PORTAL_URL` to your real deployed site/portal
+      URLs — used to build the redirect links after Square checkouts.
 - [ ] Update `../admin/js/config.js` to point at the deployed API URL.
 - [ ] Put the API behind HTTPS.
 - [ ] Consider adding automated backups for the database.

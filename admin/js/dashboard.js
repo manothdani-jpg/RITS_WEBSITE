@@ -102,6 +102,7 @@
       document.getElementById("view-payment").style.display = view === "payment" ? "" : "none";
       document.getElementById("view-reports").style.display = view === "reports" ? "" : "none";
       document.getElementById("view-front-desk").style.display = view === "front-desk" ? "" : "none";
+      document.getElementById("view-cultural").style.display = view === "cultural" ? "" : "none";
       if (view === "events") loadEvents();
       if (view === "homepage") loadHomepageContent();
       if (view === "media") loadMedia();
@@ -112,6 +113,7 @@
       if (view === "payment") { loadPaymentSettings(); loadMembershipCategories(); }
       if (view === "reports") { loadReports(); loadPayments(); loadRsvpBreakdown(); }
       if (view === "front-desk") { loadDeskStaff(); loadDeskLogEventFilter(); loadDeskLog(); }
+      if (view === "cultural") { loadCulturalEventFilter(); loadCulturalStats(); loadCulturalGroups(); }
     });
   });
 
@@ -516,6 +518,11 @@
     document.getElementById("pricing-form").reset();
     nonMemberPriceTouched = false;
     loadPricingOptions();
+
+    var ev = allEvents.find(function (e) { return e.id === eventId; });
+    document.getElementById("cultural-member-fee").value = ev && ev.cultural_member_fee_cents != null ? centsToDollars(ev.cultural_member_fee_cents) : "";
+    document.getElementById("cultural-nonmember-fee").value = ev && ev.cultural_non_member_fee_cents != null ? centsToDollars(ev.cultural_non_member_fee_cents) : "";
+
     pricingModal.classList.add("is-open");
   }
   function closePricingModal() { pricingModal.classList.remove("is-open"); currentPricingEventId = null; }
@@ -549,6 +556,27 @@
       nonMemberPriceTouched = false;
       loadPricingOptions();
       toast("Pricing option added");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  document.getElementById("cultural-fee-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var memberVal = document.getElementById("cultural-member-fee").value;
+    var nonMemberVal = document.getElementById("cultural-nonmember-fee").value;
+    var payload = {
+      member_amount_cents: memberVal === "" ? null : dollarsToCents(memberVal),
+      non_member_amount_cents: nonMemberVal === "" ? null : dollarsToCents(nonMemberVal),
+    };
+    try {
+      var data = await api("/events/" + currentPricingEventId + "/cultural-pricing", { method: "PUT", body: payload });
+      var ev = allEvents.find(function (x) { return x.id === currentPricingEventId; });
+      if (ev) {
+        ev.cultural_member_fee_cents = data.event.cultural_member_fee_cents;
+        ev.cultural_non_member_fee_cents = data.event.cultural_non_member_fee_cents;
+      }
+      toast("Cultural fee saved");
     } catch (err) {
       toast(err.message, true);
     }
@@ -1753,6 +1781,129 @@
       toast(err.message, true);
     }
   }
+
+  /* ============================================================
+     CULTURAL EVENTS — group performance registrations
+     ============================================================ */
+  var PERFORMANCE_TYPE_LABELS = { dance: "Dance", singing: "Singing", drama: "Drama", speech: "Speech", other: "Other" };
+  var culturalGroupModal = document.getElementById("cultural-group-modal");
+  var currentCulturalGroupId = null;
+
+  async function loadCulturalEventFilter() {
+    var select = document.getElementById("cultural-event-filter");
+    if (select.options.length > 1) return;
+    try {
+      var data = await api("/events");
+      data.events.forEach(function (ev) {
+        var opt = document.createElement("option");
+        opt.value = ev.id;
+        opt.textContent = ev.name;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+  document.getElementById("cultural-event-filter").addEventListener("change", function () {
+    loadCulturalStats();
+    loadCulturalGroups();
+  });
+
+  async function loadCulturalStats() {
+    var eventId = document.getElementById("cultural-event-filter").value;
+    try {
+      var data = await api("/reports/cultural" + (eventId ? "?event_id=" + eventId : ""));
+      var t = data.totals;
+      document.getElementById("cultural-stats").innerHTML = [
+        ["Groups", t.group_count],
+        ["Participants", t.participant_count],
+        ["Collected", fmtMoney(t.collected_cents)],
+        ["Pending", fmtMoney(t.pending_cents)],
+      ].map(function (s) {
+        return '<div class="stat-card"><strong>' + s[1] + "</strong><span>" + s[0] + "</span></div>";
+      }).join("");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function loadCulturalGroups() {
+    var eventId = document.getElementById("cultural-event-filter").value;
+    var tbody = document.getElementById("cultural-groups-tbody");
+    try {
+      var data = await api("/cultural-groups" + (eventId ? "?event_id=" + eventId : ""));
+      document.getElementById("cultural-groups-empty").style.display = data.groups.length ? "none" : "";
+      tbody.innerHTML = data.groups.map(function (g) {
+        return (
+          "<tr>" +
+          "<td>" + escapeHtml(g.group_name) + "</td>" +
+          "<td>" + escapeHtml(g.event_name) + "</td>" +
+          "<td>" + (PERFORMANCE_TYPE_LABELS[g.performance_type] || g.performance_type) + "</td>" +
+          "<td>" + escapeHtml(g.choreographer_name) + "</td>" +
+          "<td>" + g.participant_count + "</td>" +
+          "<td>" + fmtMoney(g.amount_cents) + "</td>" +
+          '<td><span class="badge ' + (g.status === "registered" ? "badge-paid" : g.status === "cancelled" ? "badge-tier" : "badge-pending") + '">' + escapeHtml(g.status.replace("_", " ")) + "</span></td>" +
+          '<td class="row-actions"><button class="icon-btn" data-view-cultural-group="' + g.id + '" aria-label="View ' + escapeHtml(g.group_name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/></svg></button></td>' +
+          "</tr>"
+        );
+      }).join("");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  document.getElementById("cultural-groups-tbody").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-view-cultural-group]");
+    if (btn) openCulturalGroupModal(btn.getAttribute("data-view-cultural-group"));
+  });
+
+  async function openCulturalGroupModal(id) {
+    currentCulturalGroupId = id;
+    try {
+      var data = await api("/cultural-groups/" + id);
+      var g = data.group;
+      document.getElementById("cultural-group-modal-title").textContent = g.group_name;
+      document.getElementById("cultural-group-info").innerHTML =
+        escapeHtml(g.event_name) + " &middot; " + (PERFORMANCE_TYPE_LABELS[g.performance_type] || g.performance_type) + "<br>" +
+        "Choreographer/Trainer: " + escapeHtml(g.choreographer_name) + " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ")" +
+        (g.description ? "<br>" + escapeHtml(g.description) : "") +
+        "<br>Total: " + fmtMoney(g.amount_cents) + " &middot; Status: " + escapeHtml(g.status.replace("_", " "));
+
+      document.getElementById("cultural-participants-tbody").innerHTML = data.participants.map(function (p) {
+        return (
+          "<tr>" +
+          "<td>" + escapeHtml(p.full_name) + "</td>" +
+          "<td>" + escapeHtml(p.email || "—") + "</td>" +
+          "<td>" + (p.age_category === "kid" ? "Kid" : "Adult") + "</td>" +
+          '<td><span class="badge ' + (p.is_member ? "badge-paid" : "badge-tier") + '">' + (p.is_member ? "Member" : "Non-member") + "</span></td>" +
+          "<td>" + fmtMoney(p.fee_cents) + "</td>" +
+          "</tr>"
+        );
+      }).join("");
+      culturalGroupModal.classList.add("is-open");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  function closeCulturalGroupModal() { culturalGroupModal.classList.remove("is-open"); currentCulturalGroupId = null; }
+  document.getElementById("cultural-group-modal-close").addEventListener("click", closeCulturalGroupModal);
+  document.getElementById("cultural-group-close-btn").addEventListener("click", closeCulturalGroupModal);
+  culturalGroupModal.addEventListener("click", function (e) { if (e.target === culturalGroupModal) closeCulturalGroupModal(); });
+
+  document.getElementById("delete-cultural-group-btn").addEventListener("click", async function () {
+    if (!currentCulturalGroupId) return;
+    if (!confirm("Remove this group registration and all its participants? This can't be undone.")) return;
+    try {
+      await api("/cultural-groups/" + currentCulturalGroupId, { method: "DELETE" });
+      toast("Group registration removed");
+      closeCulturalGroupModal();
+      loadCulturalStats();
+      loadCulturalGroups();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
 
   /* ---------------- init ---------------- */
   refreshCategories();

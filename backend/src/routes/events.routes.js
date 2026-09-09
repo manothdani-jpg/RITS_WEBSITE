@@ -182,6 +182,39 @@ router.delete("/:id/flyer", async (req, res) => {
   res.status(204).send();
 });
 
+// PUT /api/events/:id/cultural-pricing — set the flat member/non-member
+// fee charged per participant in a cultural group registration for this
+// event. Both null (the default) means cultural registration is closed
+// for this event.
+router.put("/:id/cultural-pricing", async (req, res) => {
+  const { member_amount_cents, non_member_amount_cents } = req.body || {};
+
+  function parseCentsOrNull(value, field) {
+    if (value === null || value === undefined || value === "") return null;
+    const cents = Number(value);
+    if (!Number.isInteger(cents) || cents < 0) {
+      throw new Error(`${field} must be a non-negative integer, or null to close cultural registration`);
+    }
+    return cents;
+  }
+
+  let memberCents, nonMemberCents;
+  try {
+    memberCents = parseCentsOrNull(member_amount_cents, "member_amount_cents");
+    nonMemberCents = parseCentsOrNull(non_member_amount_cents, "non_member_amount_cents");
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  const { rows } = await db.query(
+    `UPDATE events SET cultural_member_fee_cents = $1, cultural_non_member_fee_cents = $2
+     WHERE id = $3 RETURNING id, cultural_member_fee_cents, cultural_non_member_fee_cents`,
+    [memberCents, nonMemberCents, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Event not found" });
+  res.json({ event: rows[0] });
+});
+
 // GET /api/events/:id/rsvps — attendee list for one event, with each
 // participant's name/email, whether they're a current (paid) member, and
 // what pricing options they selected.

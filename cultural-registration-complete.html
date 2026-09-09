@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registration Status — RITS</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="Media/logo.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;600;700&family=Cormorant+Garamond:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .status-shell{ min-height:80vh; display:flex; align-items:center; justify-content:center; padding:1.5rem; }
+  .status-card{ width:min(100%,440px); background:var(--surface); border-radius:var(--radius-lg); padding:2.25rem; box-shadow:var(--shadow-lift); text-align:center; }
+  .status-card img{ width:56px; height:56px; border-radius:50%; margin:0 auto 1rem; }
+  .status-card h1{ font-size:1.3rem; margin-bottom:.5rem; }
+  .status-card p{ color:var(--text-soft); font-size:.92rem; }
+  .status-box{ border-radius:var(--radius-sm); padding:.9rem 1rem; margin:1.25rem 0; font-size:.9rem; }
+</style>
+</head>
+<body>
+<div class="status-shell">
+  <div class="status-card">
+    <img src="Media/logo.png" alt="Rhode Island Tamil Sangam emblem">
+    <h1 id="status-heading">Confirming Your Registration&hellip;</h1>
+    <p id="status-text">Hang tight while we hear back from Square. This usually takes just a few seconds.</p>
+    <div class="status-box" id="status-box" style="display:none;"></div>
+    <a class="btn btn-outline-dark" href="index.html" style="width:100%;">Back to Home</a>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script>
+  var params = new URLSearchParams(window.location.search);
+  var paymentId = params.get("payment_id");
+  var isFree = params.get("free") === "1";
+
+  var statusHeading = document.getElementById("status-heading");
+  var statusText = document.getElementById("status-text");
+  var statusBox = document.getElementById("status-box");
+
+  function showResult(kind, heading, text) {
+    statusHeading.textContent = heading;
+    statusText.textContent = "";
+    statusBox.style.display = "";
+    statusBox.textContent = text;
+    if (kind === "success") {
+      statusBox.style.background = "color-mix(in srgb, var(--green) 14%, transparent)";
+      statusBox.style.color = "var(--green)";
+    } else if (kind === "pending") {
+      statusBox.style.background = "color-mix(in srgb, var(--gold) 20%, transparent)";
+      statusBox.style.color = "#8a5a00";
+    } else {
+      statusBox.style.background = "color-mix(in srgb, var(--maroon) 10%, transparent)";
+      statusBox.style.color = "var(--maroon)";
+    }
+  }
+
+  async function checkStatus() {
+    try {
+      var res = await fetch(window.RITS_API_BASE + "/cultural-groups/payment-status/" + paymentId);
+      if (!res.ok) return "keep-polling";
+      var data = await res.json();
+      var payment = data.payment;
+
+      if (payment.status === "completed") {
+        showResult("success", "Registration Confirmed!", (payment.group_name || "Your group") + " is registered for " + (payment.event_name || "the event") + " — " + (payment.amount_cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" }) + " paid. Thank you!");
+        return "stop";
+      }
+      if (payment.status === "failed" || payment.status === "cancelled") {
+        showResult("error", "Payment Not Completed", "It looks like the payment didn't go through. No charge should have been made — feel free to submit the registration again.");
+        return "stop";
+      }
+      return "keep-polling";
+    } catch (err) {
+      return "keep-polling";
+    }
+  }
+
+  (async function poll() {
+    if (isFree) {
+      showResult("success", "Registration Confirmed!", "Your group is registered — no payment was required for this event. Thank you!");
+      return;
+    }
+    if (!paymentId) {
+      showResult("error", "Missing Payment Info", "This page was opened without a payment reference. If you just paid, please contact the board to confirm your registration.");
+      return;
+    }
+
+    var attempts = 0;
+    var maxAttempts = 15;
+    var interval = setInterval(async function () {
+      attempts++;
+      var result = await checkStatus();
+      if (result === "stop") {
+        clearInterval(interval);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        showResult("pending", "Still Confirming…", "This is taking longer than usual. Your payment may still be processing — contact the board if this doesn't resolve soon.");
+      }
+    }, 2000);
+  })();
+</script>
+</body>
+</html>

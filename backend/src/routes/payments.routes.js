@@ -461,7 +461,7 @@ router.post("/webhook", async (req, res) => {
 
 async function handlePaymentUpdate(squarePayment) {
   const { rows } = await db.query(
-    "SELECT id, member_id, purpose, rsvp_id, status, amount_cents, pending_selections FROM payments WHERE square_order_id = $1",
+    "SELECT id, member_id, purpose, rsvp_id, cultural_group_id, status, amount_cents, pending_selections FROM payments WHERE square_order_id = $1",
     [squarePayment.order_id]
   );
   const paymentRow = rows[0];
@@ -497,6 +497,10 @@ async function handlePaymentUpdate(squarePayment) {
       if (paymentRow.rsvp_id) {
         await db.query("UPDATE rsvps SET status = 'registered' WHERE id = $1", [paymentRow.rsvp_id]);
       }
+    } else if (paymentRow.purpose === "cultural_group") {
+      if (paymentRow.cultural_group_id) {
+        await db.query("UPDATE cultural_groups SET status = 'registered' WHERE id = $1", [paymentRow.cultural_group_id]);
+      }
     } else {
       const renewalDate = new Date();
       renewalDate.setFullYear(renewalDate.getFullYear() + 1);
@@ -512,6 +516,9 @@ async function handlePaymentUpdate(squarePayment) {
     );
     if (!isAddonTopUp && paymentRow.purpose === "event" && paymentRow.rsvp_id) {
       await db.query("UPDATE rsvps SET status = 'cancelled' WHERE id = $1", [paymentRow.rsvp_id]);
+    }
+    if (paymentRow.purpose === "cultural_group" && paymentRow.cultural_group_id) {
+      await db.query("UPDATE cultural_groups SET status = 'cancelled' WHERE id = $1", [paymentRow.cultural_group_id]);
     }
   }
 }

@@ -94,6 +94,8 @@ CREATE TABLE IF NOT EXISTS events (
   event_date    TIMESTAMPTZ NOT NULL,
   location      TEXT,
   flyer_filename TEXT,
+  cultural_member_fee_cents INTEGER,
+  cultural_non_member_fee_cents INTEGER,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -231,13 +233,50 @@ CREATE TRIGGER trg_mail_settings_updated_at
 -- ---------------------------------------------------------------
 -- Payments — tracks Square checkout sessions for dues payments.
 -- ---------------------------------------------------------------
+-- ---------------------------------------------------------------
+-- Cultural event group registration — a choreographer/trainer registers
+-- a performance group with N participants, each individually checked
+-- against membership and fee-assessed.
+-- ---------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cultural_groups (
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id                UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  group_name              TEXT NOT NULL,
+  choreographer_member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  choreographer_name      TEXT NOT NULL,
+  choreographer_email     TEXT NOT NULL,
+  choreographer_phone     TEXT,
+  performance_type        TEXT NOT NULL CHECK (performance_type IN ('dance', 'singing', 'drama', 'speech', 'other')),
+  description             TEXT,
+  amount_cents            INTEGER NOT NULL DEFAULT 0 CHECK (amount_cents >= 0),
+  status                  TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'registered', 'cancelled')),
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cultural_groups_event_id ON cultural_groups (event_id);
+
+CREATE TABLE IF NOT EXISTS cultural_group_participants (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id      UUID NOT NULL REFERENCES cultural_groups(id) ON DELETE CASCADE,
+  full_name     TEXT NOT NULL,
+  email         TEXT,
+  age_category  TEXT NOT NULL CHECK (age_category IN ('adult', 'kid')),
+  member_id     UUID REFERENCES members(id) ON DELETE SET NULL,
+  is_member     BOOLEAN NOT NULL DEFAULT false,
+  fee_cents     INTEGER NOT NULL DEFAULT 0 CHECK (fee_cents >= 0),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cultural_group_participants_group_id ON cultural_group_participants (group_id);
+
 CREATE TABLE IF NOT EXISTS payments (
   id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id               UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-  purpose                 TEXT NOT NULL DEFAULT 'membership' CHECK (purpose IN ('membership', 'event')),
+  purpose                 TEXT NOT NULL DEFAULT 'membership' CHECK (purpose IN ('membership', 'event', 'cultural_group')),
   tier                    TEXT, -- set when purpose='membership'; validated against membership_categories in the app layer
   event_id                UUID REFERENCES events(id) ON DELETE SET NULL, -- set when purpose='event'
   rsvp_id                 UUID REFERENCES rsvps(id) ON DELETE SET NULL,  -- set when purpose='event'
+  cultural_group_id       UUID REFERENCES cultural_groups(id) ON DELETE SET NULL, -- set when purpose='cultural_group'
   amount_cents            INTEGER NOT NULL CHECK (amount_cents >= 0),
   status                  TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled', 'refunded')),
   square_order_id         TEXT,
