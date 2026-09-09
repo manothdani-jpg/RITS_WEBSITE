@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
-const { requireAdmin, requireMember } = require("../middleware/auth");
+const { requireAdmin, requireMember, requireDesk } = require("../middleware/auth");
 const { sendEmail } = require("../email");
 
 const router = express.Router();
@@ -116,6 +116,40 @@ router.post("/member/login", loginLimiter, async (req, res) => {
 
 router.get("/member/me", requireMember, (req, res) => {
   res.json({ member: req.member });
+});
+
+/* ============================================================
+   Front-desk staff login — event check-in desk only.
+   ============================================================ */
+
+router.post("/desk/login", loginLimiter, async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: "username and password are required" });
+  }
+
+  const { rows } = await db.query("SELECT * FROM desk_staff WHERE username = $1", [username]);
+  const staff = rows[0];
+  if (!staff || !staff.is_active) {
+    return res.status(401).json({ error: "Invalid username or password" });
+  }
+
+  const ok = await bcrypt.compare(password, staff.password_hash);
+  if (!ok) {
+    return res.status(401).json({ error: "Invalid username or password" });
+  }
+
+  const token = jwt.sign(
+    { type: "desk", sub: staff.id, username: staff.username, name: staff.name },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || "12h" }
+  );
+
+  res.json({ token, staff: { id: staff.id, name: staff.name, username: staff.username } });
+});
+
+router.get("/desk/me", requireDesk, (req, res) => {
+  res.json({ staff: req.desk });
 });
 
 /* ============================================================

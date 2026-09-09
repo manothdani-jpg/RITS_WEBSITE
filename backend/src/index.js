@@ -18,6 +18,8 @@ const sponsorsRoutes = require("./routes/sponsors.routes");
 const volunteersRoutes = require("./routes/volunteers.routes");
 const membershipCategoriesRoutes = require("./routes/membership-categories.routes");
 const mailSettingsRoutes = require("./routes/mail-settings.routes");
+const deskStaffRoutes = require("./routes/desk-staff.routes");
+const deskRoutes = require("./routes/desk.routes");
 const boardProfilesRoutes = require("./routes/board-profiles.routes");
 
 const app = express();
@@ -68,6 +70,8 @@ app.use("/api/sponsors", sponsorsRoutes);
 app.use("/api/volunteers", volunteersRoutes);
 app.use("/api/membership-categories", membershipCategoriesRoutes);
 app.use("/api/mail-settings", mailSettingsRoutes);
+app.use("/api/desk-staff", deskStaffRoutes);
+app.use("/api/desk", deskRoutes);
 app.use("/api/board-profiles", boardProfilesRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));

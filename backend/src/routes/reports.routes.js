@@ -148,4 +148,45 @@ router.get("/rsvp-breakdown", async (req, res) => {
   res.json({ events });
 });
 
+// GET /api/reports/front-desk?event_id= — everything recorded by front-desk
+// staff: payments they took (any method) and check-ins they performed.
+// event_id is optional; omit it to see activity across all events.
+router.get("/front-desk", async (req, res) => {
+  const eventId = req.query.event_id || null;
+
+  const payments = await db.query(
+    `SELECT p.id, p.amount_cents, p.method, p.status, p.created_at,
+            m.first_name, m.last_name, m.email,
+            e.name AS event_name, e.id AS event_id,
+            ds.name AS staff_name
+     FROM payments p
+     JOIN members m ON m.id = p.member_id
+     LEFT JOIN events e ON e.id = p.event_id
+     LEFT JOIN desk_staff ds ON ds.id = p.recorded_by_desk_staff_id
+     WHERE p.recorded_by_desk_staff_id IS NOT NULL
+       AND ($1::uuid IS NULL OR p.event_id = $1)
+     ORDER BY p.created_at DESC
+     LIMIT 500`,
+    [eventId]
+  );
+
+  const checkins = await db.query(
+    `SELECT r.id AS rsvp_id, r.checked_in_at,
+            m.first_name, m.last_name, m.email,
+            e.name AS event_name, e.id AS event_id,
+            ds.name AS staff_name
+     FROM rsvps r
+     JOIN members m ON m.id = r.member_id
+     JOIN events e ON e.id = r.event_id
+     LEFT JOIN desk_staff ds ON ds.id = r.checked_in_by_desk_staff_id
+     WHERE r.checked_in_by_desk_staff_id IS NOT NULL
+       AND ($1::uuid IS NULL OR r.event_id = $1)
+     ORDER BY r.checked_in_at DESC
+     LIMIT 500`,
+    [eventId]
+  );
+
+  res.json({ payments: payments.rows, checkins: checkins.rows });
+});
+
 module.exports = router;

@@ -1,19 +1,21 @@
 # RITS Backend
 
 Node.js + Express + PostgreSQL API for Rhode Island Tamil Sangam member records,
-family members, events, and RSVPs. Powers three login surfaces:
+family members, events, and RSVPs. Powers four login surfaces:
 
 - **`../admin/`** — Super Admin and Board Director dashboard
 - **`../portal/`** — member self-service portal
+- **`../frontdesk/`** — event-day check-in desk (see "Front desk" below)
 - **`../index.html`** — the public site's membership signup form
 
-## Three login types
+## Four login types
 
 | Role | Logs in via | Can do |
 |---|---|---|
 | **Super Admin** | `../admin/` | Everything a Board Director can, plus create/edit/remove Board Director and Super Admin accounts (`../admin/` → "Admin Logins" tab, only visible to this role). |
 | **Board Director** | `../admin/` | Manage all members, family members, events, and RSVPs from the dashboard, send email communications to members, and edit the public payment/dues page. Cannot manage other admin accounts. |
 | **Member** | `../portal/` | View their own profile/payment status, edit their own contact info, manage their own family members, RSVP to events. Cannot see other members' data, and cannot change their own email, membership tier, or payment status (board-controlled). |
+| **Desk staff** | `../frontdesk/` | Register/check in people for events and take event-day payments only — no access to member records, homepage content, reports, or anything else in the admin dashboard. Accounts are created by any board director or super admin from `../admin/` → "Front Desk". |
 
 Board Directors and Super Admins have identical permissions everywhere
 except admin-account management (`../admin/` → "Admin Logins" tab and
@@ -154,6 +156,7 @@ psql "$DATABASE_URL" -f db/migrations/018_event_flyers.sql
 psql "$DATABASE_URL" -f db/migrations/019_pillar_content.sql
 psql "$DATABASE_URL" -f db/migrations/020_social_links.sql
 psql "$DATABASE_URL" -f db/migrations/021_mail_settings.sql
+psql "$DATABASE_URL" -f db/migrations/022_front_desk.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -271,6 +274,19 @@ dashboard) to point at the real API URL.
 | GET | `/api/mail-settings` | **superadmin** | Current SMTP config (password never included, only whether one is set) |
 | PUT | `/api/mail-settings` | **superadmin** | Update SMTP config; omit `password` to leave it unchanged |
 | POST | `/api/mail-settings/test` | **superadmin** (rate-limited) | Send a real test email through the saved settings |
+| POST | `/api/auth/desk/login` | — (rate-limited) | Desk staff login, returns a JWT |
+| GET | `/api/auth/desk/me` | desk | Verify token / current desk staff |
+| GET/POST | `/api/desk-staff` | admin/board | List / create desk staff logins |
+| PUT/DELETE | `/api/desk-staff/:id` | admin/board | Edit (rename/reset password/activate) or remove a desk login |
+| GET | `/api/desk/events` | desk | Events to choose from |
+| GET | `/api/desk/events/:id` | desk | One event's details + pricing options |
+| GET | `/api/desk/events/:id/attendees` | desk | Everyone registered, for search/check-in |
+| GET | `/api/desk/events/:id/totals` | desk | Live headcounts + money collected by method |
+| GET | `/api/desk/members/search` | desk | Look up an existing member by name/email |
+| POST | `/api/desk/events/:id/register` | desk (rate-limited) | Register an existing member or new walk-in, with payment |
+| POST | `/api/desk/events/:id/add-items` | desk (rate-limited) | Add more items for someone already registered |
+| PUT | `/api/desk/rsvps/:id/checkin` | desk | Mark attended (or undo) |
+| GET | `/api/reports/front-desk` | admin/board | Every payment/check-in recorded at the door, optionally filtered by event |
 | GET | `/api/communications/recipient-count` | admin/board | Preview how many members match a filter |
 | POST | `/api/communications/send` | admin/board (rate-limited) | Email members matching a filter |
 | GET | `/api/reports/summary` | admin/board | Aggregate membership stats |
@@ -327,7 +343,10 @@ are not interchangeable — each only works against its own set of routes.
   `amount_cents` for priced events, status
   (pending_payment/registered/attended/cancelled/no_show), and
   `member_at_registration` (a snapshot of whether they were a paid-up
-  member when they registered — see "Viewing attendees" above).
+  member when they registered — see "Viewing attendees" above), and
+  `checked_in_by_desk_staff_id` / `checked_in_at` (set when front-desk
+  staff marks them attended — see "Front desk" above; `status='attended'`
+  is what actually reflects check-in, these two columns are just who/when).
 - `event_pricing_options` — admin-defined participation/add-on choices for
   one event (see "Event pricing" above).
 - `rsvp_selections` — which pricing option(s) (and quantities) a specific
@@ -344,14 +363,21 @@ are not interchangeable — each only works against its own set of routes.
 - `mail_settings` — singleton row for SMTP config (see "Mail server
   settings" above); `smtp_pass_encrypted` holds the password
   AES-256-GCM-encrypted, never in plain text.
-- `payments` — one row per Square checkout attempt: member, `purpose`
-  (membership/event), amount, `status` (pending/completed/failed/cancelled),
-  and the Square order/payment-link/payment IDs used to match incoming
-  webhooks back to this row. `tier` is set for membership payments;
-  `event_id`/`rsvp_id` are set for event payments. `pending_selections`
-  is set only for an add-on top-up payment (see "Buying more add-ons"
-  above) — its presence is how `handlePaymentUpdate` tells a top-up
-  apart from the original registration payment.
+- `payments` — one row per payment attempt (Square or manual): member,
+  `purpose` (membership/event), amount, `method`
+  (square/cash/venmo/zelle/paypal, defaults `square`), `status`
+  (pending/completed/failed/cancelled/refunded), and the Square
+  order/payment-link/payment IDs used to match incoming webhooks back to
+  this row (unused for manual methods, which go straight to `completed`).
+  `tier` is set for membership payments; `event_id`/`rsvp_id` are set for
+  event payments. `recorded_by_desk_staff_id` is set only when front-desk
+  staff took the payment. `pending_selections` is set only for an add-on
+  top-up payment (see "Buying more add-ons" above) — its presence is how
+  `handlePaymentUpdate` tells a top-up apart from the original
+  registration payment.
+- `desk_staff` — front-desk login accounts (see "Front desk" above);
+  `is_active = false` blocks login without deleting the account or losing
+  its history.
 - `site_content` — generic `key`/`value` rows for editable homepage text
   (e.g. `hero.heading`, `about.mission`, `contact.email`) — see "Homepage"
   above.
@@ -661,6 +687,64 @@ member/non-member price and the RSVP's `member_at_registration` — again a
 best-effort estimate, not a guaranteed match to what was actually charged
 if prices were edited since.
 
+## Front desk (event-day check-in)
+
+`../frontdesk/` is a fourth, separate app for staffing an event's door —
+registering walk-ins, taking payment, and checking people in — without
+handing out real admin or member logins. It's a third JWT type (`type:
+"desk"`, `desk_staff` table, `requireDesk` middleware), completely
+independent of admin and member auth: a desk token can't touch `/api/members`,
+`/api/admins`, or anything else outside `/api/desk/*`, and vice versa
+(verified directly — cross-token requests get a clean 401, not a partial
+success).
+
+**Creating desk logins:** `../admin/` → "Front Desk" (either role, not
+superadmin-gated — this is event-day staffing, not dashboard-account-tier
+access) → "+ Add Desk Login". Deactivating or deleting a login doesn't
+touch the transactions/check-ins it already recorded — the reference just
+goes null (`ON DELETE SET NULL`), so history is never lost.
+
+**What the desk page does** (`../frontdesk/desk.html`):
+- Picks an event (defaults to the soonest upcoming one) and shows live
+  totals for it — checked in / registered / payment-pending counts, and
+  money collected broken down by payment method.
+- Search existing members by name/email, or add a walk-in on the spot
+  (name required; email/phone optional). A walk-in becomes a real row in
+  `members` (tier `individual`, status `pending`) — if the email they give
+  matches an existing member, that record is reused rather than
+  duplicated; with no email given, a placeholder (`walkin-<uuid>@no-email...`)
+  is generated so the `NOT NULL UNIQUE` constraint on `members.email`
+  is still satisfied.
+- Picks participation/add-on options exactly like the member portal does
+  (member vs. non-member pricing, based on the resolved person's current
+  `payment_status` — a brand-new walk-in is always "pending", so always
+  non-member pricing until the board marks them paid).
+- Payment method: **Cash / Venmo / Zelle / PayPal** are logged, not
+  processed — desk staff has already collected the money in person, so
+  the payment is recorded as `completed` immediately with that `method`
+  and the RSVP goes straight to `registered`, no waiting. **Square**
+  reuses the real Square Checkout flow already built for the portal (open
+  the link on a tablet, hand it to the guest) — the RSVP stays
+  `pending_payment` until the same webhook that confirms portal payments
+  confirms this one too; nothing at the app layer knows or cares who
+  initiated it.
+- If the chosen person is already registered for the event, the same flow
+  automatically switches to "add items" mode (participation can't be
+  re-picked, only more add-ons) — mirrors the portal's Buy More endpoint
+  exactly, including the same "never touch the confirmed registration if
+  a top-up payment fails" safety property.
+- Check-in tab: search/filter the attendee list, mark anyone
+  `registered`/`attended` as checked in (or undo it) —
+  `rsvps.checked_in_by_desk_staff_id` / `checked_in_at` record who and
+  when. A `pending_payment` RSVP can't be checked in until it's paid.
+- A printable receipt (browser print, `@media print` hides everything
+  else on the page) after each completed registration.
+
+**Admin visibility:** `../admin/` → "Front Desk" also shows every
+transaction/check-in recorded at the door — separate from (but the same
+underlying `payments`/`rsvps` rows as) the regular Reports — filterable by
+event, via `GET /api/reports/front-desk`.
+
 ## Local dev server (static site) — cache-busting matters
 
 Serve the static site (`../index.html`, `../admin/`, `../portal/`, etc.)
@@ -690,8 +774,9 @@ switch.
       already saved means re-entering the SMTP password from the dashboard).
 - [ ] Switch Square to production credentials and a production webhook
       subscription (see above) — sandbox payments aren't real money.
-- [ ] Update `../js/config.js` and `../portal/js/config.js` to point at the
-      deployed API URL too (not just `../admin/js/config.js`).
+- [ ] Update `../js/config.js`, `../portal/js/config.js`, and
+      `../frontdesk/js/config.js` to point at the deployed API URL too (not
+      just `../admin/js/config.js`).
 - [ ] Attach a persistent volume/disk mounted at `uploads/` if your host's
       filesystem is ephemeral (Render/Railway/Heroku default) — otherwise
       gallery photos and sponsor logos disappear on every redeploy.

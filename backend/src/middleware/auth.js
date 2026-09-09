@@ -45,4 +45,15 @@ function requireMember(req, res, next) {
   next();
 }
 
-module.exports = { requireAdmin, requireRole, requireMember };
+/** A logged-in front-desk staff account (event check-in desk). */
+function requireDesk(req, res, next) {
+  const payload = verifyBearer(req);
+  if (payload === null) return res.status(401).json({ error: "Missing bearer token" });
+  if (payload === undefined || payload.type !== "desk") {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+  req.desk = payload;
+  next();
+}
+
+module.exports = { requireAdmin, requireRole, requireMember, requireDesk };

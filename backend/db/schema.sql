@@ -21,6 +21,20 @@ CREATE TABLE IF NOT EXISTS admins (
 );
 
 -- ---------------------------------------------------------------
+-- Front-desk check-in staff — a third login type, separate from board
+-- admin and member logins, scoped only to the desk pages.
+-- ---------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS desk_staff (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name          TEXT NOT NULL,
+  username      CITEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  is_active     BOOLEAN NOT NULL DEFAULT true,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------
 -- Members (primary/household record)
 -- ---------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS members (
@@ -97,6 +111,8 @@ CREATE TABLE IF NOT EXISTS rsvps (
   status        TEXT NOT NULL DEFAULT 'registered'
                   CHECK (status IN ('pending_payment', 'registered', 'attended', 'cancelled', 'no_show')),
   member_at_registration BOOLEAN,
+  checked_in_by_desk_staff_id UUID REFERENCES desk_staff(id) ON DELETE SET NULL,
+  checked_in_at TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (member_id, event_id)
 );
@@ -148,6 +164,10 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_members_updated_at ON members;
 CREATE TRIGGER trg_members_updated_at
   BEFORE UPDATE ON members
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER desk_staff_set_updated_at
+  BEFORE UPDATE ON desk_staff
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------
@@ -225,6 +245,8 @@ CREATE TABLE IF NOT EXISTS payments (
   square_payment_id       TEXT,
   pending_selections      JSONB, -- add-on top-up picks, applied on webhook confirm (see payments.routes.js)
   refund_of_payment_id    UUID REFERENCES payments(id) ON DELETE SET NULL, -- set on a status='refunded' row, pointing at the payment it refunded
+  method                  TEXT NOT NULL DEFAULT 'square' CHECK (method IN ('square', 'cash', 'venmo', 'zelle', 'paypal')),
+  recorded_by_desk_staff_id UUID REFERENCES desk_staff(id) ON DELETE SET NULL, -- set for front-desk-recorded manual payments
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );

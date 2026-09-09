@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Front Desk — RITS</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="../Media/logo.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;600;700&family=Cormorant+Garamond:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="css/desk.css">
+</head>
+<body>
+<header class="portal-header">
+  <a class="portal-brand" href="desk.html">
+    <img src="../Media/logo.png" alt="RITS emblem">
+    <span>RITS Front Desk</span>
+  </a>
+  <div style="display:flex; align-items:center; gap:1rem;">
+    <span id="who-name" style="font-size:.88rem; color:var(--text-soft);"></span>
+    <button class="btn btn-outline-dark btn-sm" id="logout-btn">Sign Out</button>
+  </div>
+</header>
+
+<main class="portal-main">
+  <div class="event-picker">
+    <select id="event-select"></select>
+    <span id="event-meta" style="font-size:.88rem; color:var(--text-soft);"></span>
+  </div>
+
+  <div class="stat-row" id="totals-row"></div>
+
+  <div class="desk-tabs">
+    <button type="button" class="desk-tab is-active" data-tab="register">Register / Add Items</button>
+    <button type="button" class="desk-tab" data-tab="checkin">Check-In</button>
+  </div>
+
+  <!-- ==================== Register tab ==================== -->
+  <section id="tab-register">
+    <div class="portal-card">
+      <h2>Find or Add a Person</h2>
+      <p class="hint">Search for an existing member, or add a walk-in on the spot.</p>
+      <div class="form-row">
+        <label for="person-search">Search by name or email</label>
+        <input type="text" id="person-search" placeholder="Start typing…">
+      </div>
+      <div class="search-results" id="person-search-results"></div>
+
+      <div id="selected-person" style="display:none; margin-top:1rem;">
+        <div class="pricing-choice" style="justify-content:space-between; background:var(--cream); border-radius:var(--radius-sm); padding:.75rem .9rem;">
+          <span id="selected-person-label" style="font-weight:600;"></span>
+          <button type="button" class="btn btn-outline-dark btn-sm" id="clear-person-btn">Change</button>
+        </div>
+      </div>
+
+      <details style="margin-top:1rem;">
+        <summary style="cursor:pointer; font-weight:600; font-size:.9rem; color:var(--maroon);">+ New walk-in (not in the system yet)</summary>
+        <div class="field-grid" style="margin-top:.75rem;">
+          <div class="form-row"><label for="wi-first-name">First name</label><input id="wi-first-name"></div>
+          <div class="form-row"><label for="wi-last-name">Last name</label><input id="wi-last-name"></div>
+          <div class="form-row"><label for="wi-email">Email (optional)</label><input type="email" id="wi-email"></div>
+          <div class="form-row"><label for="wi-phone">Phone (optional)</label><input id="wi-phone"></div>
+        </div>
+        <button type="button" class="btn btn-outline-dark btn-sm" id="use-walkin-btn">Use This Walk-in</button>
+      </details>
+    </div>
+
+    <div class="portal-card" id="registration-card" style="display:none;">
+      <h2>Event Items</h2>
+      <p class="hint" id="registration-mode-note"></p>
+      <div class="pricing-selections" id="pricing-selections"></div>
+      <div class="pricing-total">Total: <strong id="pricing-total">$0.00</strong></div>
+
+      <h2 style="margin-top:1.5rem;">Payment Method</h2>
+      <div class="method-grid" id="method-grid">
+        <button type="button" class="method-btn" data-method="cash">Cash</button>
+        <button type="button" class="method-btn" data-method="venmo">Venmo</button>
+        <button type="button" class="method-btn" data-method="zelle">Zelle</button>
+        <button type="button" class="method-btn" data-method="paypal">PayPal</button>
+        <button type="button" class="method-btn" data-method="square">Square (card)</button>
+      </div>
+
+      <button type="button" class="btn btn-primary" id="submit-registration-btn" style="width:100%; margin-top:1rem;">Complete Registration</button>
+    </div>
+
+    <div class="portal-card" id="receipt-card" style="display:none;">
+      <h2>✓ Done</h2>
+      <div id="receipt-summary"></div>
+      <div style="display:flex; gap:.6rem; margin-top:1rem;">
+        <button type="button" class="btn btn-outline-dark btn-sm" id="print-receipt-btn">Print Receipt</button>
+        <button type="button" class="btn btn-primary btn-sm" id="register-another-btn">Register Another</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Check-in tab ==================== -->
+  <section id="tab-checkin" style="display:none;">
+    <div class="portal-card">
+      <h2>Attendees</h2>
+      <div class="form-row"><label for="checkin-search">Search</label><input type="text" id="checkin-search" placeholder="Filter by name or email…"></div>
+      <div id="attendees-list" style="margin-top:1rem;"></div>
+      <div class="empty-note" id="attendees-empty" style="display:none;">No one registered for this event yet.</div>
+    </div>
+  </section>
+</main>
+
+<div class="receipt" id="receipt-print">
+  <img src="../Media/logo.png" alt="RITS" style="width:60px;">
+  <h2 id="receipt-print-event"></h2>
+  <p id="receipt-print-name"></p>
+  <div id="receipt-print-items"></div>
+  <p id="receipt-print-total" style="font-weight:700;"></p>
+  <p id="receipt-print-method"></p>
+  <p id="receipt-print-time" style="font-size:.8rem; color:#666;"></p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/desk.js"></script>
+</body>
+</html>

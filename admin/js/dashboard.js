@@ -101,6 +101,7 @@
       document.getElementById("view-communications").style.display = view === "communications" ? "" : "none";
       document.getElementById("view-payment").style.display = view === "payment" ? "" : "none";
       document.getElementById("view-reports").style.display = view === "reports" ? "" : "none";
+      document.getElementById("view-front-desk").style.display = view === "front-desk" ? "" : "none";
       if (view === "events") loadEvents();
       if (view === "homepage") loadHomepageContent();
       if (view === "media") loadMedia();
@@ -110,6 +111,7 @@
       if (view === "communications") refreshRecipientCount();
       if (view === "payment") { loadPaymentSettings(); loadMembershipCategories(); }
       if (view === "reports") { loadReports(); loadPayments(); loadRsvpBreakdown(); }
+      if (view === "front-desk") { loadDeskStaff(); loadDeskLogEventFilter(); loadDeskLog(); }
     });
   });
 
@@ -1593,6 +1595,164 @@
       toast(err.message, true);
     }
   });
+
+  /* ============================================================
+     FRONT DESK — desk-staff login accounts + activity log
+     ============================================================ */
+  var deskStaffTbody = document.getElementById("desk-staff-tbody");
+  var deskStaffEmpty = document.getElementById("desk-staff-empty");
+  var deskStaffModal = document.getElementById("desk-staff-modal");
+  var deskStaffForm = document.getElementById("desk-staff-form");
+  var allDeskStaff = [];
+
+  async function loadDeskStaff() {
+    try {
+      var data = await api("/desk-staff");
+      allDeskStaff = data.staff;
+      deskStaffEmpty.style.display = data.staff.length ? "none" : "";
+      deskStaffTbody.innerHTML = data.staff.map(function (s) {
+        return (
+          "<tr>" +
+          "<td>" + escapeHtml(s.name) + "</td>" +
+          "<td>" + escapeHtml(s.username) + "</td>" +
+          '<td><span class="badge ' + (s.is_active ? "badge-paid" : "badge-tier") + '">' + (s.is_active ? "Active" : "Deactivated") + "</span></td>" +
+          "<td>" + fmtDate(s.created_at) + "</td>" +
+          '<td class="row-actions">' +
+          '<button class="icon-btn" data-edit-desk-staff="' + s.id + '" aria-label="Edit ' + escapeHtml(s.name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>' +
+          "</td></tr>"
+        );
+      }).join("");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  document.getElementById("add-desk-staff-btn").addEventListener("click", function () { openDeskStaffModal(null); });
+  document.getElementById("desk-staff-modal-close").addEventListener("click", closeDeskStaffModal);
+  document.getElementById("desk-staff-cancel-btn").addEventListener("click", closeDeskStaffModal);
+  deskStaffModal.addEventListener("click", function (e) { if (e.target === deskStaffModal) closeDeskStaffModal(); });
+  function closeDeskStaffModal() { deskStaffModal.classList.remove("is-open"); }
+
+  deskStaffTbody.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-edit-desk-staff]");
+    if (btn) openDeskStaffModal(btn.getAttribute("data-edit-desk-staff"));
+  });
+
+  function openDeskStaffModal(id) {
+    deskStaffForm.reset();
+    document.getElementById("ds-id").value = id || "";
+    document.getElementById("delete-desk-staff-btn").style.display = id ? "" : "none";
+    document.getElementById("ds-password").required = !id;
+    document.getElementById("ds-password-hint").style.display = id ? "" : "none";
+    document.getElementById("ds-password-label").textContent = id ? "New Password (optional)" : "Password";
+    document.getElementById("ds-active-row").style.display = id ? "" : "none";
+
+    if (id) {
+      var s = allDeskStaff.find(function (x) { return x.id === id; });
+      document.getElementById("desk-staff-modal-title").textContent = "Edit Desk Login";
+      document.getElementById("ds-name").value = s.name;
+      document.getElementById("ds-username").value = s.username;
+      document.getElementById("ds-active").checked = s.is_active;
+    } else {
+      document.getElementById("desk-staff-modal-title").textContent = "Add Desk Login";
+    }
+    deskStaffModal.classList.add("is-open");
+  }
+
+  deskStaffForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var id = document.getElementById("ds-id").value;
+    var password = document.getElementById("ds-password").value;
+    var payload = {
+      name: document.getElementById("ds-name").value.trim(),
+      username: document.getElementById("ds-username").value.trim(),
+    };
+    if (password) payload.password = password;
+    if (id) payload.is_active = document.getElementById("ds-active").checked;
+
+    try {
+      if (id) {
+        await api("/desk-staff/" + id, { method: "PUT", body: payload });
+        toast("Desk login updated");
+      } else {
+        await api("/desk-staff", { method: "POST", body: payload });
+        toast("Desk login created");
+      }
+      closeDeskStaffModal();
+      loadDeskStaff();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  document.getElementById("delete-desk-staff-btn").addEventListener("click", async function () {
+    var id = document.getElementById("ds-id").value;
+    if (!id) return;
+    if (!confirm("Remove this desk login? Past transactions it recorded stay in the log.")) return;
+    try {
+      await api("/desk-staff/" + id, { method: "DELETE" });
+      toast("Desk login removed");
+      closeDeskStaffModal();
+      loadDeskStaff();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  async function loadDeskLogEventFilter() {
+    var select = document.getElementById("desk-log-event-filter");
+    if (select.options.length > 1) return; // already populated
+    try {
+      var data = await api("/events");
+      data.events.forEach(function (ev) {
+        var opt = document.createElement("option");
+        opt.value = ev.id;
+        opt.textContent = ev.name;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+  document.getElementById("desk-log-event-filter").addEventListener("change", loadDeskLog);
+
+  async function loadDeskLog() {
+    var eventId = document.getElementById("desk-log-event-filter").value;
+    try {
+      var data = await api("/reports/front-desk" + (eventId ? "?event_id=" + eventId : ""));
+
+      var paymentsBody = document.getElementById("desk-payments-tbody");
+      document.getElementById("desk-payments-empty").style.display = data.payments.length ? "none" : "";
+      paymentsBody.innerHTML = data.payments.map(function (p) {
+        return (
+          "<tr>" +
+          "<td>" + escapeHtml(p.first_name + " " + p.last_name) + "</td>" +
+          "<td>" + escapeHtml(p.event_name || "—") + "</td>" +
+          "<td>" + fmtMoney(p.amount_cents) + "</td>" +
+          '<td><span class="badge badge-tier">' + escapeHtml(p.method) + "</span></td>" +
+          '<td><span class="badge ' + paymentStatusBadgeClass(p.status) + '">' + escapeHtml(p.status) + "</span></td>" +
+          "<td>" + escapeHtml(p.staff_name || "—") + "</td>" +
+          "<td>" + fmtDateTime(p.created_at) + "</td>" +
+          "</tr>"
+        );
+      }).join("");
+
+      var checkinsBody = document.getElementById("desk-checkins-tbody");
+      document.getElementById("desk-checkins-empty").style.display = data.checkins.length ? "none" : "";
+      checkinsBody.innerHTML = data.checkins.map(function (c) {
+        return (
+          "<tr>" +
+          "<td>" + escapeHtml(c.first_name + " " + c.last_name) + "</td>" +
+          "<td>" + escapeHtml(c.event_name) + "</td>" +
+          "<td>" + escapeHtml(c.staff_name || "—") + "</td>" +
+          "<td>" + fmtDateTime(c.checked_in_at) + "</td>" +
+          "</tr>"
+        );
+      }).join("");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
 
   /* ---------------- init ---------------- */
   refreshCategories();
