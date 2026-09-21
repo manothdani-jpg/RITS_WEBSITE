@@ -431,6 +431,19 @@
 
       <div class="admin-topbar" style="margin-bottom:1.25rem;">
         <div>
+          <h1 style="font-size:1.15rem;">Event Details</h1>
+          <p>Pick an event to focus the payments, registrations, and cultural groups below on just that event, then export exactly what you see to Excel.</p>
+        </div>
+        <div class="topbar-actions">
+          <select id="report-event-filter" style="min-width:220px;">
+            <option value="">All events</option>
+          </select>
+          <button class="btn btn-primary" id="export-report-xlsx-btn">Export to Excel</button>
+        </div>
+      </div>
+
+      <div class="admin-topbar" style="margin-bottom:1.25rem;">
+        <div>
           <h1 style="font-size:1.15rem;">Recent Payments</h1>
           <p>Square checkouts, most recent first — includes in-progress and failed attempts.</p>
         </div>
@@ -453,6 +466,17 @@
       </div>
       <div id="rsvp-breakdown-list"></div>
       <div class="empty-state" id="rsvp-breakdown-empty" style="display:none;">No events yet.</div>
+
+      <div class="admin-topbar" style="margin:1.75rem 0 1.25rem;">
+        <div>
+          <h1 style="font-size:1.15rem;">Cultural Registrations</h1>
+          <p>Group performance registrations and their participants. Cancelled groups are left out.</p>
+        </div>
+      </div>
+      <div class="stat-row" id="report-cultural-stats"></div>
+      <div id="report-cultural-types" class="pill-list" style="margin-bottom:1.25rem;"></div>
+      <div id="report-cultural-list"></div>
+      <div class="empty-state" id="report-cultural-empty" style="display:none;">No cultural group registrations for this selection.</div>
     </section>
 
     <!-- ==================== Front Desk view ==================== -->
@@ -513,9 +537,12 @@
           <h1>Cultural Events</h1>
           <p>Group performance registrations (<a href="../cultural-registration.html" target="_blank" style="color:var(--maroon); font-weight:600;">public form</a>) — dance, singing, drama, speech, and more. Set each event's per-participant fee from the Events tab's $ icon.</p>
         </div>
-        <select id="cultural-event-filter" style="min-width:220px;">
-          <option value="">All events</option>
-        </select>
+        <div class="topbar-actions">
+          <select id="cultural-event-filter" style="min-width:220px;">
+            <option value="">All events</option>
+          </select>
+          <button class="btn btn-primary" id="export-cultural-xlsx-btn">Export to Excel</button>
+        </div>
       </div>
 
       <div class="stat-row" id="cultural-stats"></div>

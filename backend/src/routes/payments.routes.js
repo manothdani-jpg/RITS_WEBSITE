@@ -600,12 +600,18 @@ async function handlePaymentUpdate(squarePayment) {
    Admin/board — list all payments for reconciliation.
    ============================================================ */
 router.get("/", requireAdmin, async (req, res) => {
+  const eventId = req.query.event_id || null;
+  if (eventId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventId)) {
+    return res.status(400).json({ error: "Invalid event_id" });
+  }
   const { rows } = await db.query(
     `SELECT p.*, m.first_name, m.last_name, m.email, e.name AS event_name
      FROM payments p
      JOIN members m ON m.id = p.member_id
      LEFT JOIN events e ON e.id = p.event_id
-     ORDER BY p.created_at DESC LIMIT 200`
+     WHERE ($1::uuid IS NULL OR p.event_id = $1)
+     ORDER BY p.created_at DESC LIMIT 200`,
+    [eventId]
   );
   res.json({ payments: rows });
 });

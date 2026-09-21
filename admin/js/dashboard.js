@@ -111,9 +111,9 @@
       if (view === "volunteers") loadVolunteers();
       if (view === "communications") refreshRecipientCount();
       if (view === "payment") { loadPaymentSettings(); loadMembershipCategories(); }
-      if (view === "reports") { loadReports(); loadPayments(); loadRsvpBreakdown(); }
+      if (view === "reports") { loadReports(); refreshEventFilter("report-event-filter").then(loadReportEventSections); }
       if (view === "front-desk") { loadDeskStaff(); loadDeskLogEventFilter(); loadDeskLog(); }
-      if (view === "cultural") { loadCulturalEventFilter(); loadCulturalStats(); loadCulturalGroups(); }
+      if (view === "cultural") { refreshEventFilter("cultural-event-filter").then(function () { loadCulturalStats(); loadCulturalGroups(); }); }
     });
   });
 
@@ -1497,12 +1497,14 @@
     var tbody = document.getElementById("payments-tbody");
     var empty = document.getElementById("payments-empty");
     try {
-      var data = await api("/payments");
+      var data = await api("/payments" + reportEventQuery());
       empty.style.display = data.payments.length ? "none" : "";
       tbody.innerHTML = data.payments.map(function (p) {
         var what = p.purpose === "event"
           ? '<span class="badge badge-tier">Event</span> ' + escapeHtml(p.event_name || "—")
-          : '<span class="badge badge-tier">' + tierLabel(p.tier) + "</span>";
+          : p.purpose === "cultural_group"
+            ? '<span class="badge badge-tier">Cultural</span> ' + escapeHtml(p.event_name || "—")
+            : '<span class="badge badge-tier">' + tierLabel(p.tier) + "</span>";
         return (
           "<tr>" +
           "<td>" + escapeHtml(p.first_name + " " + p.last_name) + "<br><span style=\"color:var(--text-soft); font-size:.82rem;\">" + escapeHtml(p.email) + "</span></td>" +
@@ -1517,6 +1519,66 @@
       toast(err.message, true);
     }
   }
+
+  // Rebuilds an "All events / <each event>" dropdown from the events list,
+  // keeping the current selection, so newly added events show up without a
+  // page reload. Resolves (never rejects) so callers can chain loads on it.
+  function refreshEventFilter(selectId) {
+    var select = document.getElementById(selectId);
+    var previous = select.value;
+    return api("/events").then(function (data) {
+      select.innerHTML = '<option value="">All events</option>' + data.events.map(function (ev) {
+        return '<option value="' + ev.id + '">' + escapeHtml(ev.name) + "</option>";
+      }).join("");
+      select.value = previous;
+      if (select.selectedIndex === -1) select.value = "";
+    }).catch(function (err) {
+      toast(err.message, true);
+    });
+  }
+
+  var reportEventFilter = document.getElementById("report-event-filter");
+  function reportEventQuery() {
+    return reportEventFilter.value ? "?event_id=" + encodeURIComponent(reportEventFilter.value) : "";
+  }
+  function loadReportEventSections() {
+    loadPayments();
+    loadRsvpBreakdown();
+    loadReportCultural();
+  }
+  reportEventFilter.addEventListener("change", loadReportEventSections);
+
+  // Downloads an authenticated export and saves it under a name that says
+  // which selection it holds, e.g. rits-cultural-events-thanksgiving-2026-09-21.xlsx.
+  async function runExport(btn, path, prefix, select) {
+    var label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Preparing…";
+    try {
+      var res = await fetch(API + path, { headers: { Authorization: "Bearer " + token } });
+      if (!res.ok) throw new Error("Could not generate the export");
+      var blob = await res.blob();
+      var chosen = select.value ? select.options[select.selectedIndex].textContent : "all events";
+      var slug = chosen.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "event";
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = prefix + "-" + slug + "-" + new Date().toISOString().slice(0, 10) + ".xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  document.getElementById("export-report-xlsx-btn").addEventListener("click", function () {
+    runExport(this, "/reports/event-report.xlsx" + reportEventQuery(), "rits-event-report", reportEventFilter);
+  });
 
   document.getElementById("export-csv-btn").addEventListener("click", async function () {
     try {
@@ -1550,7 +1612,7 @@
     var host = document.getElementById("rsvp-breakdown-list");
     var empty = document.getElementById("rsvp-breakdown-empty");
     try {
-      var data = await api("/reports/rsvp-breakdown");
+      var data = await api("/reports/rsvp-breakdown" + reportEventQuery());
       empty.style.display = data.events.length ? "none" : "";
       host.innerHTML = data.events.map(function (ev) {
         var optionsTable = ev.options.length
@@ -1577,6 +1639,70 @@
           "</div>" +
           optionsTable +
           renderRegistrantsTable(ev.registrants) +
+          "</div>"
+        );
+      }).join("");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function loadReportCultural() {
+    var qs = reportEventQuery();
+    var statsHost = document.getElementById("report-cultural-stats");
+    var typesHost = document.getElementById("report-cultural-types");
+    var listHost = document.getElementById("report-cultural-list");
+    var empty = document.getElementById("report-cultural-empty");
+    try {
+      var results = await Promise.all([api("/reports/cultural" + qs), api("/reports/cultural-groups" + qs)]);
+      var t = results[0].totals;
+      statsHost.innerHTML = [
+        ["Groups", t.group_count],
+        ["Participants", t.participant_count],
+        ["Collected", fmtMoney(t.collected_cents)],
+        ["Pending", fmtMoney(t.pending_cents)],
+      ].map(function (s) {
+        return '<div class="stat-card"><strong>' + s[1] + "</strong><span>" + s[0] + "</span></div>";
+      }).join("");
+
+      typesHost.innerHTML = results[0].by_performance_type.map(function (row) {
+        return '<span class="pill">' + (PERFORMANCE_TYPE_LABELS[row.performance_type] || row.performance_type) +
+          ': <strong style="margin-left:.3em;">' + row.group_count + (row.group_count === 1 ? " group" : " groups") +
+          " · " + row.participant_count + (row.participant_count === 1 ? " participant" : " participants") + "</strong></span>";
+      }).join("");
+
+      var groups = results[1].groups;
+      empty.style.display = groups.length ? "none" : "";
+      listHost.innerHTML = groups.map(function (g) {
+        var members = g.participants.filter(function (p) { return p.is_member; }).length;
+        var kids = g.participants.filter(function (p) { return p.age_category === "kid"; }).length;
+        var statusClass = g.status === "registered" ? "badge-paid" : "badge-pending";
+        var participantsTable = g.participants.length
+          ? '<table style="margin-top:.75rem;"><thead><tr><th>Participant</th><th>Email</th><th>Adult / Kid</th><th>Membership</th><th>Fee</th></tr></thead><tbody>' +
+            g.participants.map(function (p) {
+              return (
+                "<tr><td>" + escapeHtml(p.full_name) + "</td><td>" + escapeHtml(p.email || "—") + "</td><td>" +
+                (p.age_category === "kid" ? "Kid" : "Adult") + '</td><td><span class="badge ' + (p.is_member ? "badge-paid" : "badge-tier") + '">' +
+                (p.is_member ? "Member" : "Non-member") + "</span></td><td>" + fmtMoney(p.fee_cents) + "</td></tr>"
+              );
+            }).join("") + "</tbody></table>"
+          : "";
+        return (
+          '<div class="table-wrap" style="padding:1.5rem; margin-bottom:1rem;">' +
+          '<div class="section-title" style="margin-top:0; display:flex; justify-content:space-between; align-items:baseline; gap:1rem;">' +
+          "<span>" + escapeHtml(g.group_name) + '<span style="font-weight:400; color:var(--text-soft); margin-left:.5rem;">' +
+          escapeHtml(g.event_name) + " &middot; " + (PERFORMANCE_TYPE_LABELS[g.performance_type] || g.performance_type) + "</span></span>" +
+          '<span style="color:var(--maroon);">' + fmtMoney(g.amount_cents) + "</span>" +
+          "</div>" +
+          '<div class="pill-list">' +
+          '<span class="pill">Participants: <strong style="margin-left:.3em;">' + g.participants.length + "</strong></span>" +
+          '<span class="pill">Members: <strong style="margin-left:.3em;">' + members + "</strong></span>" +
+          '<span class="pill">Kids: <strong style="margin-left:.3em;">' + kids + "</strong></span>" +
+          '<span class="badge ' + statusClass + '" style="align-self:center;">' + escapeHtml(g.status.replace("_", " ")) + "</span>" +
+          "</div>" +
+          '<p class="empty-note" style="padding:.6rem 0 0; margin:0;">Choreographer/Trainer: ' + escapeHtml(g.choreographer_name) +
+          " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ")</p>" +
+          participantsTable +
           "</div>"
         );
       }).join("");
@@ -1832,24 +1958,14 @@
   var culturalGroupModal = document.getElementById("cultural-group-modal");
   var currentCulturalGroupId = null;
 
-  async function loadCulturalEventFilter() {
-    var select = document.getElementById("cultural-event-filter");
-    if (select.options.length > 1) return;
-    try {
-      var data = await api("/events");
-      data.events.forEach(function (ev) {
-        var opt = document.createElement("option");
-        opt.value = ev.id;
-        opt.textContent = ev.name;
-        select.appendChild(opt);
-      });
-    } catch (err) {
-      toast(err.message, true);
-    }
-  }
   document.getElementById("cultural-event-filter").addEventListener("change", function () {
     loadCulturalStats();
     loadCulturalGroups();
+  });
+
+  document.getElementById("export-cultural-xlsx-btn").addEventListener("click", function () {
+    var select = document.getElementById("cultural-event-filter");
+    runExport(this, "/reports/cultural.xlsx" + (select.value ? "?event_id=" + encodeURIComponent(select.value) : ""), "rits-cultural-events", select);
   });
 
   async function loadCulturalStats() {

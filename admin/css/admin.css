@@ -30,6 +30,7 @@ body{ background:var(--cream); min-height:100vh; }
 .admin-topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1.75rem; gap:1rem; flex-wrap:wrap; }
 .admin-topbar h1{ font-size:1.6rem; margin:0; }
 .admin-topbar p{ margin:.2rem 0 0; color:var(--text-soft); font-size:.92rem; }
+.topbar-actions{ display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
 
 .admin-toolbar{ display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; margin-bottom:1.25rem; }
 .admin-toolbar input[type="search"], .admin-toolbar select{
