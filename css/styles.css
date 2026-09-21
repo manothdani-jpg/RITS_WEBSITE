@@ -18,7 +18,7 @@
   --text-strong:#3a2313;
   --text-soft:#7a5a34;
   --rule:#b9782b;
-  --surface:#fff; /* elevated card/input backgrounds — see dark-mode overrides below */
+  --surface:#fff;
 
   --font-display:"Cormorant SC","Noto Serif",serif;
   --font-heading:"Cormorant Garamond","Noto Serif",serif;
@@ -32,29 +32,7 @@
   --shadow-lift:0 16px 40px rgba(28,19,12,.18);
   --container:1180px;
   --header-h:76px;
-}
-
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --stage-1:#2b160e;
-    --stage-2:#160c08;
-    --text-strong:#fbeed8;
-    --text-soft:#d8b98d;
-    --white:#241309;
-    --cream:#2b170e;
-    --rule:#c98a35;
-    --surface:#3a2114;
-  }
-}
-:root[data-theme="dark"]{
-  --stage-1:#2b160e;
-  --stage-2:#160c08;
-  --text-strong:#fbeed8;
-  --text-soft:#d8b98d;
-  --white:#241309;
-  --cream:#2b170e;
-  --rule:#c98a35;
-  --surface:#3a2114;
+  color-scheme:light;
 }
 
 *,*::before,*::after{ box-sizing:border-box; }
