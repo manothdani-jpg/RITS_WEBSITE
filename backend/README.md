@@ -132,10 +132,19 @@ cp .env.example .env
 # and generate JWT_SECRET and ENCRYPTION_KEY (two different values) with:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
-# 4. Apply the schema (fresh database) ...
+# 4. Apply the schema.
+#
+# FRESH database: schema.sql is a full snapshot of everything through
+# migration 023, so run it and then ONLY the migrations numbered 024 and
+# higher. Do NOT run 002-023 on a fresh database — several (009, 010, 013,
+# 014, 022) fail on top of schema.sql because their changes are already in it.
 npm run db:migrate
-# ... or, if upgrading an existing database, also run whichever
-# incremental migrations you're missing, in order:
+psql "$DATABASE_URL" -f db/migrations/024_audit_log.sql
+psql "$DATABASE_URL" -f db/migrations/025_admin_password_reset.sql
+psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
+#
+# EXISTING database created before those migrations existed: instead run
+# whichever incremental migrations you're missing, in order:
 psql "$DATABASE_URL" -f db/migrations/002_roles_and_member_auth.sql
 psql "$DATABASE_URL" -f db/migrations/003_member_password_reset.sql
 psql "$DATABASE_URL" -f db/migrations/004_payment_settings.sql
@@ -881,6 +890,15 @@ switch.
       URLs — used to build the redirect links after Square checkouts.
 - [ ] Update `../admin/js/config.js` to point at the deployed API URL.
 - [ ] Put the API behind HTTPS.
+- [ ] Start production from a FRESH database (not a copy of your dev one, which
+      holds test members/payments): `schema.sql`, then migrations 024+ only (see
+      Local setup step 4), then `npm run db:seed` for the first superadmin.
+- [ ] Load the homepage text you've already written: after the migrations, run
+      `psql "$PROD_DATABASE_URL" -f db/homepage-content.sql` ONCE. It's a
+      snapshot of the dev `site_content` table and overwrites those keys, so
+      never re-run it after launch or it will undo the board's later edits.
+      (Uploaded photos — board, sponsors, event flyers — live in `uploads/`,
+      not the database; copy those files to the production disk too.)
 - [ ] Enable your host's automated Postgres backups (Render, Railway, Fly.io,
       and most managed Postgres providers offer this) — don't rely solely on
       running `npm run db:backup` by hand. If self-hosting, schedule it via
