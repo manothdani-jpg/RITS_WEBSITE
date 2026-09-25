@@ -249,6 +249,7 @@
     document.getElementById("pricing-selections").innerHTML = html || '<p class="empty-note">This event is free — no items to select.</p>';
     document.querySelectorAll(".method-btn").forEach(function (b) { b.classList.remove("is-selected"); });
     selectedMethod = null;
+    document.getElementById("registration-remarks").value = "";
     computeTotal();
     card.style.display = "";
     document.getElementById("receipt-card").style.display = "none";
@@ -301,11 +302,12 @@
     btn.disabled = true;
     btn.textContent = "Processing…";
     try {
+      var remarks = document.getElementById("registration-remarks").value.trim();
       var result;
       if (registrationMode === "add-items") {
         result = await api("/desk/events/" + currentEventId + "/add-items", {
           method: "POST",
-          body: { member_id: selectedPerson.id, addons: addons, payment_method: selectedMethod },
+          body: { member_id: selectedPerson.id, addons: addons, payment_method: selectedMethod, remarks: remarks || undefined },
         });
       } else {
         var checkedParticipation = document.querySelector('input[name="participation"]:checked');
@@ -313,6 +315,7 @@
           addons: addons,
           payment_method: selectedMethod,
           participation_option_id: checkedParticipation ? checkedParticipation.value : undefined,
+          remarks: remarks || undefined,
         };
         if (selectedPerson.isWalkin) {
           payload.first_name = selectedPerson.first_name;
@@ -376,6 +379,7 @@
     document.getElementById("wi-last-name").value = "";
     document.getElementById("wi-email").value = "";
     document.getElementById("wi-phone").value = "";
+    document.getElementById("registration-remarks").value = "";
   }
 
   /* ---------------- Check-in tab ---------------- */
@@ -410,8 +414,12 @@
       var canCheckIn = a.status === "registered" || a.status === "attended";
       return (
         '<div class="attendee-row">' +
-        '<div><div class="ar-name">' + escapeHtml(a.first_name + " " + a.last_name) + "</div>" +
-        '<div class="ar-detail">' + escapeHtml(a.email) + (selections ? " · " + selections : "") + (a.amount_cents ? " · " + fmtMoney(a.amount_cents) : "") + "</div></div>" +
+        '<div style="flex:1;"><div class="ar-name">' + escapeHtml(a.first_name + " " + a.last_name) + "</div>" +
+        '<div class="ar-detail">' + escapeHtml(a.email) + (selections ? " · " + selections : "") + (a.amount_cents ? " · " + fmtMoney(a.amount_cents) : "") + "</div>" +
+        '<div class="ar-remarks-row">' +
+        '<input type="text" class="ar-remarks-input" data-remarks-input="' + a.id + '" value="' + escapeHtml(a.remarks || "") + '" placeholder="Remarks…">' +
+        '<button type="button" class="btn btn-outline-dark btn-sm" data-save-remarks="' + a.id + '" style="display:none;">Save</button>' +
+        "</div></div>" +
         '<div class="ar-actions">' +
         '<span class="badge ' + statusBadgeClass(a.status) + '">' + escapeHtml(a.status.replace("_", " ")) + "</span>" +
         (canCheckIn
@@ -426,19 +434,52 @@
   document.getElementById("checkin-search").addEventListener("input", renderAttendees);
 
   document.getElementById("attendees-list").addEventListener("click", async function (e) {
-    var btn = e.target.closest("[data-checkin]");
-    if (!btn) return;
-    var undo = btn.getAttribute("data-undo") === "1";
-    try {
-      await api("/desk/rsvps/" + btn.getAttribute("data-checkin") + "/checkin", {
-        method: "PUT",
-        body: { checked_in: !undo },
-      });
-      toast(undo ? "Check-in undone" : "Checked in");
-      await Promise.all([loadAttendees(), loadTotals()]);
-    } catch (err) {
-      toast(err.message, true);
+    var checkinBtn = e.target.closest("[data-checkin]");
+    if (checkinBtn) {
+      var undo = checkinBtn.getAttribute("data-undo") === "1";
+      try {
+        await api("/desk/rsvps/" + checkinBtn.getAttribute("data-checkin") + "/checkin", {
+          method: "PUT",
+          body: { checked_in: !undo },
+        });
+        toast(undo ? "Check-in undone" : "Checked in");
+        await Promise.all([loadAttendees(), loadTotals()]);
+      } catch (err) {
+        toast(err.message, true);
+      }
+      return;
     }
+
+    var saveBtn = e.target.closest("[data-save-remarks]");
+    if (saveBtn) {
+      var rsvpId = saveBtn.getAttribute("data-save-remarks");
+      var input = document.querySelector('[data-remarks-input="' + rsvpId + '"]');
+      saveBtn.disabled = true;
+      try {
+        var result = await api("/desk/rsvps/" + rsvpId + "/remarks", {
+          method: "PUT",
+          body: { remarks: input.value },
+        });
+        var attendee = currentAttendees.find(function (a) { return a.id === rsvpId; });
+        if (attendee) attendee.remarks = result.rsvp.remarks;
+        input.classList.remove("is-dirty");
+        saveBtn.style.display = "none";
+        toast("Remarks saved");
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    }
+  });
+
+  // Show the Save button only once a remarks field has actually been edited.
+  document.getElementById("attendees-list").addEventListener("input", function (e) {
+    if (!e.target.matches("[data-remarks-input]")) return;
+    e.target.classList.add("is-dirty");
+    var rsvpId = e.target.getAttribute("data-remarks-input");
+    var saveBtn = document.querySelector('[data-save-remarks="' + rsvpId + '"]');
+    if (saveBtn) saveBtn.style.display = "";
   });
 
   loadEvents();

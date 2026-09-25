@@ -160,6 +160,7 @@ psql "$DATABASE_URL" -f db/migrations/022_front_desk.sql
 psql "$DATABASE_URL" -f db/migrations/023_cultural_groups.sql
 psql "$DATABASE_URL" -f db/migrations/024_audit_log.sql
 psql "$DATABASE_URL" -f db/migrations/025_admin_password_reset.sql
+psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed

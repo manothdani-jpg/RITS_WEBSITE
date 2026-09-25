@@ -142,6 +142,22 @@ router.put("/rsvps/:id/checkin", async (req, res) => {
   res.json({ rsvp: rows[0] });
 });
 
+/* ============================================================
+   PUT /api/desk/rsvps/:id/remarks — set/edit the free-text note on an
+   RSVP, independent of check-in status (so a note can be added or
+   updated from the Check-In tab without toggling attendance).
+   Body: { remarks: string | null }
+   ============================================================ */
+router.put("/rsvps/:id/remarks", async (req, res) => {
+  const remarks = (req.body && typeof req.body.remarks === "string" ? req.body.remarks.trim() : "") || null;
+  const { rows } = await db.query(
+    "UPDATE rsvps SET remarks = $1 WHERE id = $2 RETURNING id, remarks",
+    [remarks, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "RSVP not found" });
+  res.json({ rsvp: rows[0] });
+});
+
 /* ------------------------------------------------------------
    Shared helpers
    ------------------------------------------------------------ */
@@ -217,7 +233,7 @@ async function finalizePayment({ member, event, amountCents, lineItems, purpose,
    isn't already registered for this event.
    ============================================================ */
 router.post("/events/:id/register", async (req, res) => {
-  const { member_id, first_name, last_name, email, phone, participation_option_id, addons, payment_method } = req.body || {};
+  const { member_id, first_name, last_name, email, phone, participation_option_id, addons, payment_method, remarks } = req.body || {};
   const eventId = req.params.id;
 
   try {
@@ -282,13 +298,15 @@ router.post("/events/:id/register", async (req, res) => {
 
     // Manual-method payments are confirmed on the spot; Square still waits for the webhook.
     const rsvpStatus = amountCents === 0 ? "registered" : payment_method === "square" ? "pending_payment" : "registered";
+    const cleanRemarks = (typeof remarks === "string" ? remarks.trim() : "") || null;
     const rsvpResult = await db.query(
-      `INSERT INTO rsvps (member_id, event_id, amount_cents, status, member_at_registration)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO rsvps (member_id, event_id, amount_cents, status, member_at_registration, remarks)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (member_id, event_id)
-       DO UPDATE SET amount_cents = EXCLUDED.amount_cents, status = EXCLUDED.status, member_at_registration = EXCLUDED.member_at_registration
+       DO UPDATE SET amount_cents = EXCLUDED.amount_cents, status = EXCLUDED.status, member_at_registration = EXCLUDED.member_at_registration,
+         remarks = COALESCE(EXCLUDED.remarks, rsvps.remarks)
        RETURNING id`,
-      [member.id, eventId, amountCents, rsvpStatus, isActiveMember]
+      [member.id, eventId, amountCents, rsvpStatus, isActiveMember, cleanRemarks]
     );
     const rsvpId = rsvpResult.rows[0].id;
 
@@ -317,7 +335,7 @@ router.post("/events/:id/register", async (req, res) => {
    add-ons for someone already registered (e.g. they want food too).
    ============================================================ */
 router.post("/events/:id/add-items", async (req, res) => {
-  const { member_id, addons, payment_method } = req.body || {};
+  const { member_id, addons, payment_method, remarks } = req.body || {};
   const eventId = req.params.id;
 
   try {
@@ -340,6 +358,10 @@ router.post("/events/:id/add-items", async (req, res) => {
     const rsvp = rsvpResult.rows[0];
     if (!rsvp || !["registered", "attended"].includes(rsvp.status)) {
       return res.status(400).json({ error: "This person isn't registered for this event yet — use Register instead." });
+    }
+    const cleanRemarks = (typeof remarks === "string" ? remarks.trim() : "") || null;
+    if (cleanRemarks) {
+      await db.query("UPDATE rsvps SET remarks = $1 WHERE id = $2", [cleanRemarks, rsvp.id]);
     }
 
     const isActiveMember = member.payment_status === "paid";

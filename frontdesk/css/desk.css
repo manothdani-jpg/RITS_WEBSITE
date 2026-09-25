@@ -110,6 +110,13 @@ body{ background:var(--cream); min-height:100vh; }
 .attendee-row .ar-name{ font-weight:600; font-size:.95rem; }
 .attendee-row .ar-detail{ font-size:.8rem; color:var(--text-soft); margin-top:.15rem; }
 .attendee-row .ar-actions{ display:flex; gap:.5rem; align-items:center; }
+.attendee-row .ar-remarks-row{ display:flex; gap:.4rem; align-items:center; margin-top:.4rem; width:100%; }
+.attendee-row .ar-remarks-input{
+  flex:1; min-width:160px; font-size:.82rem; font-family:inherit;
+  border:1.5px solid color-mix(in srgb, var(--rule) 35%, transparent); border-radius:var(--radius-sm);
+  padding:.35em .6em; background:var(--surface);
+}
+.attendee-row .ar-remarks-input.is-dirty{ border-color:var(--maroon); }
 
 .method-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:.6rem; margin:.75rem 0 1.25rem; }
 .method-btn{
