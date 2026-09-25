@@ -402,9 +402,46 @@ router.get("/event-report.xlsx", async (req, res) => {
     const events = await getRsvpBreakdown(eventId);
     const workbook = new ExcelJS.Workbook();
 
+    // Sheet order mirrors the Reports page's own top-to-bottom section
+    // order (Recent Payments, then Event RSVP Breakdown, then Cultural
+    // Registrations), and sheet names mirror those section headers, so
+    // it's obvious which tab holds which part of what's on screen.
+    const payments = await db.query(
+      `SELECT p.created_at, m.first_name, m.last_name, m.email, p.purpose, mc.label AS tier_label,
+              e.name AS event_name, p.amount_cents, p.method, p.status
+       FROM payments p
+       JOIN members m ON m.id = p.member_id
+       LEFT JOIN events e ON e.id = p.event_id
+       LEFT JOIN membership_categories mc ON mc.key = p.tier
+       WHERE ($1::uuid IS NULL OR p.event_id = $1)
+       ORDER BY p.created_at DESC`,
+      [eventId]
+    );
+    const PURPOSE_LABELS = { event: "Event", cultural_group: "Cultural group", membership: "Membership dues" };
     addSheet(
       workbook,
-      "Events",
+      "Recent Payments",
+      [
+        { header: "Date", key: "created_at", width: 18, type: "datetime" },
+        { header: "Member", key: "member", width: 26 },
+        { header: "Email", key: "email", width: 30 },
+        { header: "For", key: "for", width: 18 },
+        { header: "Event / Tier", key: "detail", width: 28 },
+        { header: "Amount", key: "amount_cents", width: 12, type: "money" },
+        { header: "Method", key: "method", width: 10 },
+        { header: "Status", key: "status", width: 12 },
+      ],
+      payments.rows.map((p) => ({
+        ...p,
+        member: `${p.first_name} ${p.last_name}`,
+        for: PURPOSE_LABELS[p.purpose] || p.purpose,
+        detail: p.purpose === "membership" ? p.tier_label : p.event_name,
+      }))
+    );
+
+    addSheet(
+      workbook,
+      "Event RSVP Summary",
       [
         { header: "Event", key: "event_name", width: 28 },
         { header: "Date", key: "event_date", width: 18, type: "date" },
@@ -419,7 +456,7 @@ router.get("/event-report.xlsx", async (req, res) => {
 
     addSheet(
       workbook,
-      "By Option",
+      "Event RSVP by Option",
       [
         { header: "Event", key: "event_name", width: 28 },
         { header: "Option", key: "label", width: 28 },
@@ -436,7 +473,7 @@ router.get("/event-report.xlsx", async (req, res) => {
 
     addSheet(
       workbook,
-      "Registrants",
+      "Event RSVP Registrants",
       [
         { header: "Event", key: "event_name", width: 28 },
         { header: "First Name", key: "first_name", width: 16 },
@@ -458,39 +495,6 @@ router.get("/event-report.xlsx", async (req, res) => {
           status: r.status.replace("_", " "),
         }))
       )
-    );
-
-    const payments = await db.query(
-      `SELECT p.created_at, m.first_name, m.last_name, m.email, p.purpose, mc.label AS tier_label,
-              e.name AS event_name, p.amount_cents, p.method, p.status
-       FROM payments p
-       JOIN members m ON m.id = p.member_id
-       LEFT JOIN events e ON e.id = p.event_id
-       LEFT JOIN membership_categories mc ON mc.key = p.tier
-       WHERE ($1::uuid IS NULL OR p.event_id = $1)
-       ORDER BY p.created_at DESC`,
-      [eventId]
-    );
-    const PURPOSE_LABELS = { event: "Event", cultural_group: "Cultural group", membership: "Membership dues" };
-    addSheet(
-      workbook,
-      "Payments",
-      [
-        { header: "Date", key: "created_at", width: 18, type: "datetime" },
-        { header: "Member", key: "member", width: 26 },
-        { header: "Email", key: "email", width: 30 },
-        { header: "For", key: "for", width: 18 },
-        { header: "Event / Tier", key: "detail", width: 28 },
-        { header: "Amount", key: "amount_cents", width: 12, type: "money" },
-        { header: "Method", key: "method", width: 10 },
-        { header: "Status", key: "status", width: 12 },
-      ],
-      payments.rows.map((p) => ({
-        ...p,
-        member: `${p.first_name} ${p.last_name}`,
-        for: PURPOSE_LABELS[p.purpose] || p.purpose,
-        detail: p.purpose === "membership" ? p.tier_label : p.event_name,
-      }))
     );
 
     addCulturalSheets(workbook, await getCulturalGroupsDetailed(eventId, { excludeCancelled: true }));
