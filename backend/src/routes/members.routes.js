@@ -44,6 +44,14 @@ async function sanitizeMemberInput(body, { partial = false, activeCategoriesOnly
       throw new Error("a valid email is required");
     }
   }
+  // Required when creating a member (public signup or admin "Add Member"),
+  // but never blocks editing an existing member that predates this rule —
+  // unlike first_name/last_name/email, partial edits can leave phone blank.
+  if (!partial) {
+    if (!out.phone || typeof out.phone !== "string" || !out.phone.trim()) {
+      throw new Error("phone is required");
+    }
+  }
   if (out.membership_tier !== undefined) {
     const query = activeCategoriesOnly
       ? "SELECT 1 FROM membership_categories WHERE key = $1 AND is_active = true"

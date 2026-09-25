@@ -218,6 +218,11 @@
     currentFamily = [];
     resetFamilyForm();
 
+    // Phone is required when adding a new member, matching the public
+    // signup form — but editing an existing member never forces one in,
+    // since plenty of legacy records predate this rule.
+    document.getElementById("f-phone").required = !id;
+
     if (id) {
       document.getElementById("member-modal-title").textContent = "Edit Member";
       try {

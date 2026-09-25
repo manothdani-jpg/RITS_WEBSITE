@@ -24,6 +24,7 @@ router.post("/", signupLimiter, async (req, res) => {
   if (!first_name || typeof first_name !== "string") return res.status(400).json({ error: "first_name is required" });
   if (!last_name || typeof last_name !== "string") return res.status(400).json({ error: "last_name is required" });
   if (!email || !EMAIL_RE.test(email)) return res.status(400).json({ error: "a valid email is required" });
+  if (!phone || typeof phone !== "string" || !phone.trim()) return res.status(400).json({ error: "phone is required" });
 
   let cleanInterests = [];
   if (interests !== undefined) {

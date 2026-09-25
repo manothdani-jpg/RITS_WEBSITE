@@ -148,8 +148,8 @@ router.post("/", submitLimiter, async (req, res) => {
     performance_type, description, participants,
   } = req.body || {};
 
-  if (!event_id || !group_name || !choreographer_name || !choreographer_email || !performance_type) {
-    return res.status(400).json({ error: "event_id, group_name, choreographer_name, choreographer_email, and performance_type are required" });
+  if (!event_id || !group_name || !choreographer_name || !choreographer_email || !choreographer_phone || !performance_type) {
+    return res.status(400).json({ error: "event_id, group_name, choreographer_name, choreographer_email, choreographer_phone, and performance_type are required" });
   }
   if (!EMAIL_RE.test(choreographer_email)) {
     return res.status(400).json({ error: "A valid choreographer/trainer email is required" });
