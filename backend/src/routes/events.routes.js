@@ -50,7 +50,9 @@ router.get("/:id/ics", async (req, res) => {
   const ics = buildCalendar([event], { siteUrl });
   const filename = event.name.trim().replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".ics";
   res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  // "inline" (not "attachment") so iOS Safari shows its native "Add to
+  // Calendar" preview sheet directly, rather than just downloading the file.
+  res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
   res.send(ics);
 });
 
