@@ -4,6 +4,7 @@ const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireDesk } = require("../middleware/auth");
 const { createPaymentLink } = require("../square");
+const { sendEmail, formatMoney } = require("../email");
 
 const router = express.Router();
 router.use(requireDesk);
@@ -194,6 +195,50 @@ function validateMethod(method) {
   }
 }
 
+const NO_EMAIL_DOMAIN = "@no-email.ritamilsangam.local";
+const METHOD_LABELS = { cash: "Cash", venmo: "Venmo", zelle: "Zelle", paypal: "PayPal" };
+
+function hasRealEmail(member) {
+  return !!(member && member.email && !member.email.endsWith(NO_EMAIL_DOMAIN));
+}
+
+// Emails the registrant a receipt once desk staff has recorded a manual
+// payment. Never throws — a delivery problem must not undo a registration
+// that already succeeded. Returns a status the desk UI turns into a message:
+//   "sent" | "not_configured" (no SMTP set up) | "failed" | "skipped"
+async function sendDeskReceipt({ member, event, selections, amountCents, method, paymentId, sendReceipt }) {
+  if (sendReceipt === false || !hasRealEmail(member)) return { status: "skipped" };
+  try {
+    const when = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+    const lines = selections.map((s) => `${s.option.label}${s.quantity > 1 ? ` ×${s.quantity}` : ""}: ${formatMoney(s.amountCents)}`);
+    const methodLabel = METHOD_LABELS[method] || method;
+    const paid = amountCents > 0;
+    const ref = paymentId ? `Receipt #${String(paymentId).slice(0, 8).toUpperCase()}\n` : "";
+    const refHtml = paymentId ? `<p style="color:#666;">Receipt #${String(paymentId).slice(0, 8).toUpperCase()}</p>` : "";
+    const text =
+      `Hi ${member.first_name},\n\n` +
+      (paid ? `Thank you — we've received your payment for ${event.name}.\n\n` : `You're registered for ${event.name}.\n\n`) +
+      (lines.length ? lines.map((l) => `  - ${l}`).join("\n") + "\n\n" : "") +
+      `Total: ${formatMoney(amountCents)}${paid ? ` (paid via ${methodLabel})` : ""}\n` +
+      `Date: ${when}\n${ref}\nRITS`;
+    const html =
+      `<p>Hi ${member.first_name},</p>` +
+      (paid ? `<p>Thank you — we've received your payment for <strong>${event.name}</strong>.</p>` : `<p>You're registered for <strong>${event.name}</strong>.</p>`) +
+      (lines.length ? `<ul>${lines.map((l) => `<li>${l}</li>`).join("")}</ul>` : "") +
+      `<p>Total: <strong>${formatMoney(amountCents)}</strong>${paid ? ` (paid via ${methodLabel})` : ""}<br>Date: ${when}</p>${refHtml}<p>RITS</p>`;
+    const result = await sendEmail({
+      to: member.email,
+      subject: paid ? `Your receipt for ${event.name}` : `You're registered for ${event.name}`,
+      text,
+      html,
+    });
+    return { status: result.delivered ? "sent" : "not_configured", email: member.email };
+  } catch (err) {
+    console.error("Failed to send desk receipt email:", err);
+    return { status: "failed", email: member.email };
+  }
+}
+
 async function finalizePayment({ member, event, amountCents, lineItems, purpose, tier, eventId, rsvpId, method, deskStaffId }) {
   if (amountCents === 0) return { free: true };
 
@@ -219,12 +264,12 @@ async function finalizePayment({ member, event, amountCents, lineItems, purpose,
   }
 
   // Manual method — desk staff has already collected payment in person.
-  await db.query(
+  const manual = await db.query(
     `INSERT INTO payments (member_id, purpose, tier, event_id, rsvp_id, amount_cents, status, method, recorded_by_desk_staff_id)
-     VALUES ($1, $2, $3, $4, $5, $6, 'completed', $7, $8)`,
+     VALUES ($1, $2, $3, $4, $5, $6, 'completed', $7, $8) RETURNING id`,
     [member.id, purpose, tier || null, eventId || null, rsvpId || null, amountCents, method, deskStaffId]
   );
-  return { collected: true };
+  return { collected: true, payment_id: manual.rows[0].id };
 }
 
 /* ============================================================
@@ -233,7 +278,7 @@ async function finalizePayment({ member, event, amountCents, lineItems, purpose,
    isn't already registered for this event.
    ============================================================ */
 router.post("/events/:id/register", async (req, res) => {
-  const { member_id, first_name, last_name, email, phone, participation_option_id, addons, payment_method, remarks } = req.body || {};
+  const { member_id, first_name, last_name, email, phone, participation_option_id, addons, payment_method, remarks, send_receipt } = req.body || {};
   const eventId = req.params.id;
 
   try {
@@ -323,7 +368,21 @@ router.post("/events/:id/register", async (req, res) => {
       method: payment_method, deskStaffId: req.desk.sub,
     });
 
-    res.status(201).json({ member_id: member.id, rsvp_id: rsvpId, amount_cents: amountCents, ...result });
+    // Square payments get their confirmation email from the webhook once the
+    // card actually clears; only manual (already-collected) payments and free
+    // registrations are receipted here.
+    let receipt = { status: "skipped" };
+    if (result.collected || result.free) {
+      receipt = await sendDeskReceipt({
+        member, event, selections, amountCents, method: payment_method,
+        paymentId: result.payment_id, sendReceipt: send_receipt,
+      });
+    }
+
+    res.status(201).json({
+      member_id: member.id, rsvp_id: rsvpId, amount_cents: amountCents, ...result,
+      receipt_status: receipt.status, receipt_email: receipt.email || null,
+    });
   } catch (err) {
     console.error("Desk registration failed:", err);
     res.status(err.status || 502).json({ error: err.message || "Could not complete registration." });
@@ -335,7 +394,7 @@ router.post("/events/:id/register", async (req, res) => {
    add-ons for someone already registered (e.g. they want food too).
    ============================================================ */
 router.post("/events/:id/add-items", async (req, res) => {
-  const { member_id, addons, payment_method, remarks } = req.body || {};
+  const { member_id, addons, payment_method, remarks, send_receipt } = req.body || {};
   const eventId = req.params.id;
 
   try {
@@ -347,7 +406,7 @@ router.post("/events/:id/add-items", async (req, res) => {
     const event = eventResult.rows[0];
     if (!event) return res.status(404).json({ error: "Event not found" });
 
-    const memberResult = await db.query("SELECT id, payment_status FROM members WHERE id = $1", [member_id]);
+    const memberResult = await db.query("SELECT id, first_name, last_name, email, payment_status FROM members WHERE id = $1", [member_id]);
     const member = memberResult.rows[0];
     if (!member) return res.status(404).json({ error: "Member not found" });
 
@@ -417,12 +476,19 @@ router.post("/events/:id/add-items", async (req, res) => {
       );
     }
     await db.query("UPDATE rsvps SET amount_cents = amount_cents + $1 WHERE id = $2", [amountCents, rsvp.id]);
-    await db.query(
+    const paymentInsert = await db.query(
       `INSERT INTO payments (member_id, purpose, event_id, rsvp_id, amount_cents, status, method, recorded_by_desk_staff_id)
-       VALUES ($1, 'event', $2, $3, $4, 'completed', $5, $6)`,
+       VALUES ($1, 'event', $2, $3, $4, 'completed', $5, $6) RETURNING id`,
       [member_id, eventId, rsvp.id, amountCents, payment_method, req.desk.sub]
     );
-    res.status(201).json({ amount_cents: amountCents, collected: true });
+    const receipt = await sendDeskReceipt({
+      member, event, selections: newSelections, amountCents, method: payment_method,
+      paymentId: paymentInsert.rows[0].id, sendReceipt: send_receipt,
+    });
+    res.status(201).json({
+      amount_cents: amountCents, collected: true,
+      receipt_status: receipt.status, receipt_email: receipt.email || null,
+    });
   } catch (err) {
     console.error("Desk add-items failed:", err);
     res.status(err.status || 502).json({ error: err.message || "Could not add items." });

@@ -250,9 +250,35 @@
     document.querySelectorAll(".method-btn").forEach(function (b) { b.classList.remove("is-selected"); });
     selectedMethod = null;
     document.getElementById("registration-remarks").value = "";
+    configureReceiptOption();
     computeTotal();
     card.style.display = "";
     document.getElementById("receipt-card").style.display = "none";
+  }
+
+  // Walk-ins without an email are stored with a placeholder address; never
+  // offer (or attempt) to email one of those.
+  function realEmail(person) {
+    return person && person.email && !/@no-email\.ritamilsangam\.local$/i.test(person.email) ? person.email : "";
+  }
+
+  function configureReceiptOption() {
+    var box = document.getElementById("send-receipt");
+    var label = document.getElementById("send-receipt-label");
+    var email = realEmail(selectedPerson);
+    box.disabled = !email;
+    box.checked = !!email;
+    label.textContent = email
+      ? "Email a receipt to " + email
+      : "No email on file — add one on the walk-in form to email a receipt";
+  }
+
+  function receiptMessage(result) {
+    var to = result.receipt_email;
+    if (result.receipt_status === "sent") return " Receipt emailed to " + to + ".";
+    if (result.receipt_status === "not_configured") return " Receipt NOT sent — outgoing email isn't set up yet (Admin → Mail Server Settings).";
+    if (result.receipt_status === "failed") return " Receipt email to " + to + " failed to send.";
+    return "";
   }
 
   function computeTotal() {
@@ -307,7 +333,7 @@
       if (registrationMode === "add-items") {
         result = await api("/desk/events/" + currentEventId + "/add-items", {
           method: "POST",
-          body: { member_id: selectedPerson.id, addons: addons, payment_method: selectedMethod, remarks: remarks || undefined },
+          body: { member_id: selectedPerson.id, addons: addons, payment_method: selectedMethod, remarks: remarks || undefined, send_receipt: document.getElementById("send-receipt").checked },
         });
       } else {
         var checkedParticipation = document.querySelector('input[name="participation"]:checked');
@@ -316,6 +342,7 @@
           payment_method: selectedMethod,
           participation_option_id: checkedParticipation ? checkedParticipation.value : undefined,
           remarks: remarks || undefined,
+          send_receipt: document.getElementById("send-receipt").checked,
         };
         if (selectedPerson.isWalkin) {
           payload.first_name = selectedPerson.first_name;
@@ -333,7 +360,7 @@
         toast("Square checkout opened — hand the device to the guest. They'll show as pending until payment confirms.");
       } else {
         showReceipt(computeTotal());
-        toast("Registration recorded.");
+        toast("Registration recorded." + receiptMessage(result), result.receipt_status === "failed" || result.receipt_status === "not_configured");
       }
       await Promise.all([loadAttendees(), loadTotals()]);
     } catch (err) {
