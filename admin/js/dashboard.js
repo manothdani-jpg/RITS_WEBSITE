@@ -103,6 +103,7 @@
       document.getElementById("view-reports").style.display = view === "reports" ? "" : "none";
       document.getElementById("view-front-desk").style.display = view === "front-desk" ? "" : "none";
       document.getElementById("view-cultural").style.display = view === "cultural" ? "" : "none";
+      document.getElementById("view-activity").style.display = view === "activity" ? "" : "none";
       if (view === "events") loadEvents();
       if (view === "homepage") loadHomepageContent();
       if (view === "media") loadMedia();
@@ -114,6 +115,7 @@
       if (view === "reports") { loadReports(); refreshEventFilter("report-event-filter").then(loadReportEventSections); }
       if (view === "front-desk") { loadDeskStaff(); loadDeskLogEventFilter(); loadDeskLog(); }
       if (view === "cultural") { refreshEventFilter("cultural-event-filter").then(function () { loadCulturalStats(); loadCulturalGroups(); }); }
+      if (view === "activity") loadActivityLog(true);
     });
   });
 
@@ -2063,6 +2065,82 @@
       toast(err.message, true);
     }
   });
+
+  /* ============================================================
+     ACTIVITY LOG
+     ============================================================ */
+  var activityTypeFilter = document.getElementById("activity-type-filter");
+  var activityActionFilter = document.getElementById("activity-action-filter");
+  var activityLoadMoreBtn = document.getElementById("activity-load-more-btn");
+  var activityOldestId = null;
+  var activityTypesLoaded = false;
+
+  // "events/cultural-pricing" -> "Events / Cultural Pricing" — a generic
+  // label from the URL path segments the audit middleware recorded, so new
+  // routes show up readably without needing a name added here by hand.
+  function prettifyEntityType(t) {
+    return t.split("/").map(function (part) {
+      return part.split("-").map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(" ");
+    }).join(" / ");
+  }
+
+  function activityQuery(before) {
+    var params = [];
+    if (activityTypeFilter.value) params.push("entity_type=" + encodeURIComponent(activityTypeFilter.value));
+    if (activityActionFilter.value) params.push("action=" + encodeURIComponent(activityActionFilter.value));
+    if (before) params.push("before=" + encodeURIComponent(before));
+    return params.length ? "?" + params.join("&") : "";
+  }
+
+  function renderActivityRow(e) {
+    var actionClass = { create: "badge-paid", update: "badge-pending", delete: "badge-overdue" }[e.action] || "badge-tier";
+    var who = e.admin_name || e.admin_email || "—";
+    var hasChanges = e.changes && Object.keys(e.changes).length;
+    var details = escapeHtml(e.entity_id || "—") +
+      (hasChanges
+        ? '<details style="margin-top:.25rem;"><summary style="cursor:pointer; color:var(--text-soft); font-size:.82rem;">View details</summary>' +
+          '<pre style="white-space:pre-wrap; font-size:.78rem; margin:.4rem 0 0; color:var(--text-soft);">' + escapeHtml(JSON.stringify(e.changes, null, 2)) + "</pre></details>"
+        : "");
+    return (
+      "<tr>" +
+      "<td>" + fmtDateTime(e.created_at) + "</td>" +
+      "<td>" + escapeHtml(who) + "</td>" +
+      '<td><span class="badge ' + actionClass + '">' + e.action + "</span></td>" +
+      "<td>" + escapeHtml(prettifyEntityType(e.entity_type)) + "</td>" +
+      "<td>" + details + "</td>" +
+      "</tr>"
+    );
+  }
+
+  async function loadActivityLog(reset) {
+    var tbody = document.getElementById("activity-tbody");
+    var empty = document.getElementById("activity-empty");
+    if (reset) {
+      activityOldestId = null;
+      tbody.innerHTML = "";
+    }
+    try {
+      var data = await api("/audit-log" + activityQuery(activityOldestId));
+
+      if (!activityTypesLoaded) {
+        activityTypesLoaded = true;
+        activityTypeFilter.innerHTML = '<option value="">All areas</option>' + data.entity_types.map(function (t) {
+          return '<option value="' + escapeHtml(t) + '">' + escapeHtml(prettifyEntityType(t)) + "</option>";
+        }).join("");
+      }
+
+      if (reset) empty.style.display = data.entries.length ? "none" : "";
+      tbody.insertAdjacentHTML("beforeend", data.entries.map(renderActivityRow).join(""));
+      if (data.entries.length) activityOldestId = data.entries[data.entries.length - 1].id;
+      activityLoadMoreBtn.style.display = data.has_more ? "" : "none";
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  activityTypeFilter.addEventListener("change", function () { loadActivityLog(true); });
+  activityActionFilter.addEventListener("change", function () { loadActivityLog(true); });
+  activityLoadMoreBtn.addEventListener("click", function () { loadActivityLog(false); });
 
   /* ---------------- init ---------------- */
   refreshCategories();

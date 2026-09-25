@@ -22,6 +22,8 @@ const deskStaffRoutes = require("./routes/desk-staff.routes");
 const deskRoutes = require("./routes/desk.routes");
 const culturalGroupsRoutes = require("./routes/cultural-groups.routes");
 const boardProfilesRoutes = require("./routes/board-profiles.routes");
+const auditLogRoutes = require("./routes/audit-log.routes");
+const { auditMiddleware } = require("./audit");
 
 const app = express();
 // Capture the raw request body alongside the parsed one — Square's webhook
@@ -56,6 +58,9 @@ app.get("/api/health", (req, res) => res.json({ ok: true }));
 // Serve uploaded gallery photos / sponsor logos as static files.
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
+// Records every successful admin-authenticated data change — see src/audit.js.
+app.use(auditMiddleware);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/admins", adminsRoutes);
 app.use("/api/members", membersRoutes);
@@ -75,6 +80,7 @@ app.use("/api/desk-staff", deskStaffRoutes);
 app.use("/api/desk", deskRoutes);
 app.use("/api/cultural-groups", culturalGroupsRoutes);
 app.use("/api/board-profiles", boardProfilesRoutes);
+app.use("/api/audit-log", auditLogRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 

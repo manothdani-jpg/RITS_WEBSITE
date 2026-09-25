@@ -68,6 +68,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Admin Logins
       </button>
+      <button data-view="activity">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        Activity Log
+      </button>
     </nav>
     <div class="admin-sidebar-footer">
       <div class="admin-who">
@@ -603,6 +607,40 @@
           <input type="email" id="ms-test-to" placeholder="you@example.com">
           <button type="button" class="btn btn-outline-dark btn-sm" id="ms-test-btn">Send Test Email</button>
         </div>
+      </div>
+    </section>
+
+    <!-- ==================== Activity Log view ==================== -->
+    <section id="view-activity" style="display:none;">
+      <div class="admin-topbar">
+        <div>
+          <h1>Activity Log</h1>
+          <p>Every change made from this dashboard — who, what, and when. Logins, page views, and public-site actions (RSVPs, payments, signups) aren't included here.</p>
+        </div>
+        <div class="topbar-actions">
+          <select id="activity-type-filter">
+            <option value="">All areas</option>
+          </select>
+          <select id="activity-action-filter">
+            <option value="">All actions</option>
+            <option value="create">Created</option>
+            <option value="update">Updated</option>
+            <option value="delete">Deleted</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>When</th><th>Admin</th><th>Action</th><th>Area</th><th>Details</th></tr>
+          </thead>
+          <tbody id="activity-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="activity-empty" style="display:none;">No activity recorded yet.</div>
+      </div>
+      <div style="text-align:center; margin-top:1.25rem;">
+        <button type="button" class="btn btn-outline-dark btn-sm" id="activity-load-more-btn" style="display:none;">Load More</button>
       </div>
     </section>
   </main>
