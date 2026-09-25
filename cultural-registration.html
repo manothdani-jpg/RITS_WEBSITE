@@ -111,7 +111,7 @@
 
       <div class="cr-total-box" id="cf-total-box" style="display:none;">
         <div class="cr-total-row"><span>Estimated total</span><strong id="cf-total-amount">$0.00</strong></div>
-        <p class="cr-fee-note">Active RITS members automatically get the lower member rate — this estimate assumes non-member pricing until each participant's membership is confirmed at checkout.</p>
+        <p class="cr-fee-note">Each participant's fee updates automatically once you enter their email — active RITS members get the lower member rate.</p>
       </div>
 
       <div id="cf-error" class="form-note" style="color:var(--maroon); display:none; margin-top:1rem;"></div>
@@ -200,11 +200,10 @@
     return eventsWithCulturalFee.find(function (e) { return e.id === select.value; });
   }
 
-  // Live per-participant fee + running total. The event's cultural fee is
-  // flat per participant, so the total is just fee × participant count —
-  // but each participant's actual rate (member vs non-member) is only
-  // resolved server-side at checkout, so this shows the non-member rate as
-  // a conservative estimate.
+  // Live per-participant fee + running total. Shows a flat non-member
+  // estimate immediately (before we know who's typed an email yet), then
+  // asks the server for each participant's real fee (member vs non-member,
+  // by email) shortly after typing settles — see scheduleQuoteUpdate below.
   function recalcTotal() {
     var ev = currentCulturalEvent();
     var note = document.getElementById("cf-fee-note");
@@ -231,11 +230,74 @@
     } else {
       totalBox.style.display = "none";
     }
+
+    scheduleQuoteUpdate();
+  }
+
+  // Debounced, superseded-response-safe live pricing check against
+  // /cultural-groups/quote — the same endpoint the review step uses — so
+  // the per-participant fee shown while typing reflects real membership
+  // status instead of always assuming non-member.
+  var quoteRequestSeq = 0;
+  var quoteDebounceTimer = null;
+  function scheduleQuoteUpdate() {
+    clearTimeout(quoteDebounceTimer);
+    quoteDebounceTimer = setTimeout(fetchLiveQuote, 500);
+  }
+
+  async function fetchLiveQuote() {
+    var ev = currentCulturalEvent();
+    if (!ev) return;
+
+    var rows = Array.from(document.querySelectorAll(".cr-participant-row"));
+    var named = rows.map(function (row) {
+      return {
+        row: row,
+        full_name: row.querySelector(".cf-p-name").value.trim(),
+        email: row.querySelector(".cf-p-email").value.trim(),
+        age_category: row.querySelector(".cf-p-age").value,
+      };
+    }).filter(function (p) { return p.full_name; });
+    if (!named.length) return;
+
+    var seq = ++quoteRequestSeq;
+    try {
+      var res = await fetch(window.RITS_API_BASE + "/cultural-groups/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: ev.id,
+          participants: named.map(function (p) { return { full_name: p.full_name, email: p.email, age_category: p.age_category }; }),
+        }),
+      });
+      if (seq !== quoteRequestSeq || !res.ok) return; // stale request, or keep the flat estimate on error
+      var quote = await res.json();
+      if (seq !== quoteRequestSeq) return;
+
+      var total = 0;
+      named.forEach(function (p, i) {
+        var q = quote.participants[i];
+        var feeEl = p.row.querySelector("[data-fee]");
+        if (!q || !feeEl) return;
+        feeEl.textContent = (q.is_member ? "Member fee: " : "Non-member fee: ") + fmtMoney(q.fee_cents);
+        total += q.fee_cents;
+      });
+      // Rows without a name yet still show (and count toward the total as)
+      // the flat non-member estimate set by recalcTotal() above.
+      total += (rows.length - named.length) * ev.cultural_non_member_fee_cents;
+      document.getElementById("cf-total-amount").textContent = fmtMoney(total);
+    } catch (err) {
+      // Network hiccup — leave the flat estimate already on screen.
+    }
   }
 
   document.getElementById("cf-add-participant-btn").addEventListener("click", addParticipantRow);
 
   document.getElementById("cf-event").addEventListener("change", recalcTotal);
+
+  document.getElementById("cf-participants-list").addEventListener("input", function (e) {
+    if (e.target.matches(".cf-p-name, .cf-p-email")) scheduleQuoteUpdate();
+  });
 
   (async function loadEvents() {
     var select = document.getElementById("cf-event");
