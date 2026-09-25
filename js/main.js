@@ -3,6 +3,24 @@
 
   var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // Google Calendar's "quick add" URL — no API key needed, just a link.
+  // Default to a 2-hour duration since events only store a start time.
+  function toGoogleDate(date) {
+    return new Date(date).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  }
+  function googleCalendarUrl(ev) {
+    var start = new Date(ev.event_date);
+    var end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    var params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: ev.name,
+      dates: toGoogleDate(start) + "/" + toGoogleDate(end),
+    });
+    if (ev.description) params.set("details", ev.description);
+    if (ev.location) params.set("location", ev.location);
+    return "https://calendar.google.com/calendar/render?" + params.toString();
+  }
+
   /* ---------------- Footer year ---------------- */
   var yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = new Date().getFullYear();
@@ -175,6 +193,15 @@
         }
       }
       if (note) note.style.display = "none";
+
+      var calendarLinks = document.getElementById("event-calendar-links");
+      var googleLink = document.getElementById("add-google-calendar-link");
+      var icsLink = document.getElementById("add-ics-link");
+      if (calendarLinks && googleLink && icsLink) {
+        googleLink.href = googleCalendarUrl(ev);
+        icsLink.href = apiBase + "/events/" + ev.id + "/ics";
+        calendarLinks.style.display = "";
+      }
 
       activateCountdown(ev.event_date);
     } catch (err) {

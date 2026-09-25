@@ -4,6 +4,7 @@ const path = require("path");
 const db = require("../db");
 const { requireAdmin, requireMember } = require("../middleware/auth");
 const { makeUploader, UPLOADS_ROOT } = require("../upload");
+const { buildCalendar } = require("../ics");
 
 const router = express.Router();
 const uploadFlyer = makeUploader("events");
@@ -14,11 +15,43 @@ router.get("/", async (req, res) => {
   res.json({ events: rows });
 });
 
+// GET /api/events/calendar.ics — public: a subscribable feed of every
+// upcoming event (grace period of 1 day so an event doesn't vanish from a
+// synced calendar mid-day), so a calendar app can auto-refresh with new
+// ones instead of needing a fresh download each time. Registered before
+// GET /:id so "calendar.ics" isn't swallowed as an :id value.
+router.get("/calendar.ics", async (req, res) => {
+  const { rows } = await db.query(
+    "SELECT * FROM events WHERE event_date >= now() - interval '1 day' ORDER BY event_date ASC"
+  );
+  const siteUrl = process.env.SITE_URL || "http://localhost:8420";
+  const ics = buildCalendar(rows, { siteUrl });
+  res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+  res.setHeader("Content-Disposition", 'inline; filename="rits-events.ics"');
+  res.send(ics);
+});
+
 // GET /api/events/:id — public
 router.get("/:id", async (req, res) => {
   const { rows } = await db.query("SELECT * FROM events WHERE id = $1", [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: "Event not found" });
   res.json({ event: rows[0] });
+});
+
+// GET /api/events/:id/ics — public: download a single event as a .ics
+// file (Apple Calendar, Outlook, etc). Google Calendar gets its own
+// "quick add" URL instead, built client-side — see index.html.
+router.get("/:id/ics", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM events WHERE id = $1", [req.params.id]);
+  const event = rows[0];
+  if (!event) return res.status(404).json({ error: "Event not found" });
+
+  const siteUrl = process.env.SITE_URL || "http://localhost:8420";
+  const ics = buildCalendar([event], { siteUrl });
+  const filename = event.name.trim().replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".ics";
+  res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(ics);
 });
 
 // GET /api/events/:id/pricing — public: pricing options a member picks from when RSVPing.
