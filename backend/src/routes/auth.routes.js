@@ -242,4 +242,96 @@ router.post("/member/reset-password", forgotPasswordLimiter, async (req, res) =>
   res.json({ message: "Password updated. You can now log in with your new password." });
 });
 
+/* ============================================================
+   Admin / Board password reset — same pattern as the member flow
+   above, scoped to the admins table. A reset link only ever goes to
+   the email already on file for that admin account, so a compromised
+   admin login can't be used to reset a different admin's (e.g. a
+   superadmin's) password.
+   ============================================================ */
+
+router.post("/admin/forgot-password", forgotPasswordLimiter, async (req, res) => {
+  const { email } = req.body || {};
+  const generic = { message: "If that email is registered as an admin login, we've sent a password reset link." };
+
+  if (!email) return res.status(400).json({ error: "email is required" });
+
+  const { rows } = await db.query("SELECT id, name, email FROM admins WHERE email = $1", [email]);
+  const admin = rows[0];
+
+  if (admin) {
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+
+    await db.query(
+      "UPDATE admins SET reset_token_hash = $1, reset_token_expires_at = $2 WHERE id = $3",
+      [tokenHash, expiresAt, admin.id]
+    );
+
+    const siteUrl = process.env.SITE_URL || "http://localhost:8420";
+    const resetLink = `${siteUrl}/admin/reset-password.html?token=${rawToken}&email=${encodeURIComponent(admin.email)}`;
+
+    try {
+      await sendEmail({
+        to: admin.email,
+        subject: "Reset your RITS admin dashboard password",
+        text:
+          `Hi ${admin.name},\n\n` +
+          `Someone requested a password reset for your RITS admin dashboard login. ` +
+          `If this was you, click the link below within the next hour to set a new password:\n\n` +
+          `${resetLink}\n\n` +
+          `If you didn't request this, you can safely ignore this email.\n\nRITS`,
+        html:
+          `<p>Hi ${admin.name},</p>` +
+          `<p>Someone requested a password reset for your RITS admin dashboard login. ` +
+          `If this was you, click the link below within the next hour to set a new password:</p>` +
+          `<p><a href="${resetLink}">${resetLink}</a></p>` +
+          `<p>If you didn't request this, you can safely ignore this email.</p><p>RITS</p>`,
+      });
+    } catch (err) {
+      console.error("Failed to send admin password reset email:", err);
+      // Still return the generic success message — don't leak delivery failures to the caller.
+    }
+  }
+
+  res.json(generic);
+});
+
+router.post("/admin/reset-password", forgotPasswordLimiter, async (req, res) => {
+  const { email, token, password } = req.body || {};
+  if (!email || !token || !password) {
+    return res.status(400).json({ error: "email, token, and password are required" });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: "password must be at least 8 characters" });
+  }
+
+  const { rows } = await db.query(
+    "SELECT id, reset_token_hash, reset_token_expires_at FROM admins WHERE email = $1",
+    [email]
+  );
+  const admin = rows[0];
+
+  const invalid = () => res.status(400).json({ error: "This reset link is invalid or has expired. Please request a new one." });
+
+  if (!admin || !admin.reset_token_hash || !admin.reset_token_expires_at) return invalid();
+  if (new Date(admin.reset_token_expires_at) < new Date()) return invalid();
+
+  const providedHash = hashToken(token);
+  const storedHash = admin.reset_token_hash;
+  const same =
+    providedHash.length === storedHash.length &&
+    crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(storedHash));
+  if (!same) return invalid();
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await db.query(
+    "UPDATE admins SET password_hash = $1, reset_token_hash = NULL, reset_token_expires_at = NULL WHERE id = $2",
+    [passwordHash, admin.id]
+  );
+
+  res.json({ message: "Password updated. You can now log in with your new password." });
+});
+
 module.exports = router;

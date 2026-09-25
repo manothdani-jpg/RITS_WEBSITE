@@ -93,6 +93,8 @@ tbody tr:hover{ background:color-mix(in srgb, var(--cream) 60%, transparent); cu
   border-radius:var(--radius-sm); padding:.7rem .9rem; font-size:.85rem; margin-bottom:1rem; text-align:left;
 }
 .login-error.is-visible{ display:block; }
+.login-footer-note{ margin-top:1.25rem; font-size:.82rem; color:var(--text-soft); }
+.login-footer-note a{ color:var(--maroon); font-weight:600; text-decoration:none; }
 
 /* ---------------- Modal ---------------- */
 .modal-backdrop{
