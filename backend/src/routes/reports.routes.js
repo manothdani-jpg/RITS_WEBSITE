@@ -2,6 +2,7 @@ const express = require("express");
 const db = require("../db");
 const { requireAdmin } = require("../middleware/auth");
 const { ExcelJS, addSheet, sendWorkbook } = require("../xlsx");
+const { formatMoney } = require("../email");
 
 const router = express.Router();
 
@@ -319,11 +320,12 @@ function addCulturalSheets(workbook, groups) {
       { header: "Choreographer / Trainer", key: "choreographer_name", width: 26 },
       { header: "Email", key: "choreographer_email", width: 30 },
       { header: "Phone", key: "choreographer_phone", width: 16 },
-      { header: "Participants", key: "participant_count", width: 13 },
+      { header: "Participant Count", key: "participant_count", width: 16 },
       { header: "Members", key: "member_count", width: 10 },
       { header: "Kids", key: "kid_count", width: 8 },
       { header: "Fee", key: "amount_cents", width: 12, type: "money" },
       { header: "Status", key: "status", width: 17 },
+      { header: "Participant Details", key: "participant_details", width: 60 },
       { header: "Description", key: "description", width: 40 },
       { header: "Registered On", key: "created_at", width: 18, type: "datetime" },
     ],
@@ -334,6 +336,11 @@ function addCulturalSheets(workbook, groups) {
       member_count: g.participants.filter((p) => p.is_member).length,
       kid_count: g.participants.filter((p) => p.age_category === "kid").length,
       status: STATUS_LABELS[g.status] || g.status,
+      // Full participant detail is also its own "Cultural Participants" sheet,
+      // but a summary here too means it's visible without switching tabs.
+      participant_details: g.participants
+        .map((p) => `${p.full_name} (${p.is_member ? "member" : "non-member"}, ${p.age_category === "kid" ? "kid" : "adult"}) — ${formatMoney(p.fee_cents)}`)
+        .join("; "),
     }))
   );
 
