@@ -141,6 +141,14 @@
     return { paid: "badge-paid", pending: "badge-pending", overdue: "badge-overdue", waived: "badge-waived" }[status] || "badge-pending";
   }
 
+  function renewalCell(renewalDate) {
+    if (!renewalDate) return "—";
+    var expired = new Date(renewalDate) < new Date();
+    return expired
+      ? '<span style="color:var(--maroon); font-weight:600;">' + fmtDate(renewalDate) + " (expired)</span>"
+      : fmtDate(renewalDate);
+  }
+
   async function loadMembers() {
     var params = new URLSearchParams();
     if (searchInput.value) params.set("search", searchInput.value);
@@ -182,6 +190,7 @@
         '<td><span class="badge badge-tier">' + escapeHtml(m.membership_tier) + "</span></td>" +
         '<td><span class="badge ' + statusBadgeClass(m.payment_status) + '">' + escapeHtml(m.payment_status) + "</span></td>" +
         "<td>" + fmtDate(m.join_date) + "</td>" +
+        "<td>" + renewalCell(m.renewal_date) + "</td>" +
         '<td class="row-actions">' +
         '<button class="icon-btn" data-edit="' + m.id + '" aria-label="Edit ' + escapeHtml(m.first_name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>' +
         "</td>" +
