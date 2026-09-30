@@ -1333,6 +1333,24 @@
   var categoryForm = document.getElementById("category-form");
   var categoryLabelInput = document.getElementById("category-label");
   var categoryAmountInput = document.getElementById("category-amount");
+  var categoryRenewalType = document.getElementById("category-renewal-type");
+  var categoryRenewalMonths = document.getElementById("category-renewal-months");
+  var categoryRenewalMonth = document.getElementById("category-renewal-month");
+  var categoryRenewalDay = document.getElementById("category-renewal-day");
+  var MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function renewalRuleSummary(c) {
+    return c.renewal_type === "fixed_date"
+      ? "Expires " + MONTH_NAMES[c.renewal_month] + " " + c.renewal_day + " every year"
+      : c.renewal_months + (c.renewal_months === 1 ? " month" : " months") + " from payment";
+  }
+
+  function updateCategoryRenewalFieldVisibility() {
+    var isFixed = categoryRenewalType.value === "fixed_date";
+    document.getElementById("category-renewal-months-row").style.display = isFixed ? "none" : "";
+    document.getElementById("category-renewal-date-row").style.display = isFixed ? "" : "none";
+  }
+  categoryRenewalType.addEventListener("change", updateCategoryRenewalFieldVisibility);
 
   function categoryOptionsHtml(selectedKey, includeBlank, blankLabel) {
     var html = includeBlank ? '<option value="">' + blankLabel + "</option>" : "";
@@ -1375,6 +1393,7 @@
         (c.is_active ? "Active" : "Archived") + "</button>" +
         '<span class="pricing-option-label">' + escapeHtml(c.label) + "</span>" +
         '<span class="pricing-option-amount">' + centsToDollars(c.amount_cents) + "</span>" +
+        '<span style="color:var(--text-soft); font-size:.85rem;">' + escapeHtml(renewalRuleSummary(c)) + "</span>" +
         '<button type="button" class="icon-btn" data-edit-category="' + c.id + '" aria-label="Edit ' + escapeHtml(c.label) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>' +
         '<button type="button" class="icon-btn" data-del-category="' + c.id + '" aria-label="Delete ' + escapeHtml(c.label) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
         "</div>"
@@ -1391,6 +1410,7 @@
     editingCategoryId = null;
     categoryForm.reset();
     categoryForm.querySelector("button[type=submit]").textContent = "Add Category";
+    updateCategoryRenewalFieldVisibility();
   }
 
   categoryForm.addEventListener("submit", async function (e) {
@@ -1398,7 +1418,18 @@
     var payload = {
       label: categoryLabelInput.value.trim(),
       amount_cents: dollarsToCents(categoryAmountInput.value),
+      renewal_type: categoryRenewalType.value,
     };
+    if (payload.renewal_type === "fixed_date") {
+      payload.renewal_month = parseInt(categoryRenewalMonth.value, 10);
+      payload.renewal_day = parseInt(categoryRenewalDay.value, 10);
+      if (!payload.renewal_day || payload.renewal_day < 1 || payload.renewal_day > 31) {
+        toast("Enter a valid day (1-31) for the fixed renewal date.", true);
+        return;
+      }
+    } else {
+      payload.renewal_months = parseInt(categoryRenewalMonths.value, 10) || 12;
+    }
     if (!payload.label) return;
     try {
       if (editingCategoryId) {
@@ -1428,6 +1459,11 @@
       editingCategoryId = id;
       categoryLabelInput.value = cat.label;
       categoryAmountInput.value = centsToDollars(cat.amount_cents);
+      categoryRenewalType.value = cat.renewal_type || "rolling";
+      categoryRenewalMonths.value = cat.renewal_months || 12;
+      categoryRenewalMonth.value = cat.renewal_month || 1;
+      categoryRenewalDay.value = cat.renewal_day || "";
+      updateCategoryRenewalFieldVisibility();
       categoryForm.querySelector("button[type=submit]").textContent = "Save Changes";
       categoryLabelInput.focus();
       return;

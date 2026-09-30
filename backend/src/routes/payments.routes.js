@@ -5,6 +5,7 @@ const db = require("../db");
 const { requireMember, requireAdmin } = require("../middleware/auth");
 const { createPaymentLink, refundPayment, WebhooksHelper } = require("../square");
 const { sendEmail, formatMoney } = require("../email");
+const { computeRenewalDate } = require("../membership");
 
 const router = express.Router();
 
@@ -503,7 +504,8 @@ async function handlePaymentUpdate(squarePayment) {
             e.name AS event_name,
             cg.group_name AS cultural_group_name,
             (SELECT COUNT(*) FROM cultural_group_participants WHERE group_id = p.cultural_group_id)::int AS participant_count,
-            mc.label AS tier_label
+            mc.label AS tier_label,
+            mc.renewal_type, mc.renewal_months, mc.renewal_month, mc.renewal_day
      FROM payments p
      JOIN members m ON m.id = p.member_id
      LEFT JOIN events e ON e.id = p.event_id
@@ -569,8 +571,9 @@ async function handlePaymentUpdate(squarePayment) {
         html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for "${paymentRow.cultural_group_name}"'s registration for <strong>${paymentRow.event_name}</strong> (${participantText}) has been received. You're all set!</p><p>RITS</p>`,
       });
     } else {
-      const renewalDate = new Date();
-      renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+      // Falls back to the historical 12-months-from-payment behavior if the
+      // tier's category was deleted/renamed since the payment was created.
+      const renewalDate = computeRenewalDate(paymentRow, new Date());
       await db.query(
         "UPDATE members SET payment_status = 'paid', renewal_date = $1 WHERE id = $2",
         [renewalDate.toISOString().slice(0, 10), paymentRow.member_id]

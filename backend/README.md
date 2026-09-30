@@ -142,6 +142,7 @@ npm run db:migrate
 psql "$DATABASE_URL" -f db/migrations/024_audit_log.sql
 psql "$DATABASE_URL" -f db/migrations/025_admin_password_reset.sql
 psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
+psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
 #
 # EXISTING database created before those migrations existed: instead run
 # whichever incremental migrations you're missing, in order:
@@ -170,6 +171,7 @@ psql "$DATABASE_URL" -f db/migrations/023_cultural_groups.sql
 psql "$DATABASE_URL" -f db/migrations/024_audit_log.sql
 psql "$DATABASE_URL" -f db/migrations/025_admin_password_reset.sql
 psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
+psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed

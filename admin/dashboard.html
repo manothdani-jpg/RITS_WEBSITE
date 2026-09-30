@@ -407,7 +407,30 @@
             <label for="category-amount">Dues ($)</label>
             <input type="number" min="0" step="0.01" id="category-amount" required>
           </div>
-          <div class="form-row" style="align-self:end;">
+          <div class="form-row full">
+            <label for="category-renewal-type">Membership expires</label>
+            <select id="category-renewal-type">
+              <option value="rolling">A set period after payment</option>
+              <option value="fixed_date">On a fixed date every year</option>
+            </select>
+          </div>
+          <div class="form-row" id="category-renewal-months-row">
+            <label for="category-renewal-months">Months from payment date</label>
+            <input type="number" min="1" step="1" id="category-renewal-months" value="12">
+          </div>
+          <div class="form-row" id="category-renewal-date-row" style="display:none;">
+            <label for="category-renewal-month">Expires every year on</label>
+            <div style="display:flex; gap:.5rem;">
+              <select id="category-renewal-month" style="flex:1;">
+                <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+              </select>
+              <input type="number" min="1" max="31" step="1" id="category-renewal-day" placeholder="Day" style="width:5.5rem;">
+            </div>
+          </div>
+          <div class="form-row full" style="align-self:end;">
             <button type="submit" class="btn btn-primary btn-sm">Add Category</button>
           </div>
         </form>
