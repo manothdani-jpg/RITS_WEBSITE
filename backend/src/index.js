@@ -26,6 +26,10 @@ const auditLogRoutes = require("./routes/audit-log.routes");
 const { auditMiddleware } = require("./audit");
 
 const app = express();
+// Behind a host's reverse proxy (Render, Railway, ...) req.ip would otherwise be
+// the proxy's address for every visitor, so the login/forgot-password rate
+// limiters would share one bucket across all users.
+app.set("trust proxy", 1);
 // Capture the raw request body alongside the parsed one — Square's webhook
 // signature is computed over the exact raw bytes, which express.json()
 // otherwise discards after parsing.

@@ -936,6 +936,16 @@ switch.
       `homepage-content.sql`. Same one-time rule — it overwrites tier
       prices/renewal rules and the payment page text, so don't re-run it after
       launch. It does NOT include the Square mode/links or any credentials.
+- [ ] Load the board profiles, sponsors, gallery rows, events and event pricing:
+      run `psql "$PROD_DATABASE_URL" -f db/site-data.sql` after
+      `payment-settings.sql`. Rows keep their ids and use `ON CONFLICT DO
+      NOTHING`, so it's safe to re-run and never overwrites later edits. It's a
+      snapshot of the dev data — check the events list (it includes dev-only
+      entries) and delete any you don't want from Admin > Events. Members, RSVPs,
+      payments and cultural groups are NOT included. Then copy the image files
+      (next item).
+- [ ] Copy the uploaded images the snapshot points at. See "Copying uploaded
+      images" below.
 - [ ] Switch Square to production (sandbox payments aren't real money):
       - Square account activated for live payments, with a bank account linked.
       - In the Developer Dashboard open your app, flip the toggle to
@@ -953,12 +963,35 @@ switch.
       - Run one real $1 payment (a small tier or event), confirm it flips to
         completed on its own, then refund it from the Square dashboard. Refunds
         made in Square don't update the site's records.
-- [ ] Known gap: `src/index.js` doesn't call `app.set("trust proxy", 1)`, so
-      behind a host's proxy the login rate limiters see every visitor as one IP.
-      Add it before launch (small code change).
+- [x] `app.set("trust proxy", 1)` is set in `src/index.js`, so the login rate
+      limiters key on each visitor's real IP behind the host's proxy (this
+      assumes exactly one proxy in front, which is the case on Render).
 - [ ] Update `../js/config.js`, `../portal/js/config.js`, and
       `../frontdesk/js/config.js` to point at the deployed API URL too (not
       just `../admin/js/config.js`).
 - [ ] Attach a persistent volume/disk mounted at `uploads/` if your host's
       filesystem is ephemeral (Render/Railway/Heroku default) — otherwise
       gallery photos and sponsor logos disappear on every redeploy.
+
+### Copying uploaded images
+
+`db/site-data.sql` brings over the rows for board photos, sponsor logos and
+event flyers, but the image files themselves are in `backend/uploads/` (not in
+git). Copy them to the production disk once, after the API service has its disk
+mounted at `uploads/`:
+
+1. In Render, open the API service > Settings > SSH, add your public key, and
+   note the SSH address it shows (`srv-xxxx@ssh.<region>.render.com`).
+2. From your Mac, in `backend/`:
+
+```bash
+tar czf /tmp/rits-uploads.tgz -C uploads board sponsors gallery events
+scp /tmp/rits-uploads.tgz srv-xxxx@ssh.<region>.render.com:/tmp/
+ssh srv-xxxx@ssh.<region>.render.com \
+  'tar xzf /tmp/rits-uploads.tgz -C /opt/render/project/src/backend/uploads && ls /opt/render/project/src/backend/uploads/board | head'
+```
+
+3. Open the live homepage and check the board photos and sponsor logos render.
+
+Do this after the disk is attached — files copied to a path that isn't on the
+disk are wiped on the next deploy.
