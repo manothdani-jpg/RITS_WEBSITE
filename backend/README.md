@@ -909,7 +909,8 @@ switch.
 - [ ] Pick a host (Render, Railway, Fly.io, a VPS, etc.) and provision a
       managed Postgres instance there.
 - [ ] Set real environment variables on the host — never commit `.env`.
-- [ ] Update `CORS_ORIGINS` to your real site domain(s).
+- [ ] Update `CORS_ORIGINS` to your real site domain(s) — if left empty the API
+      accepts requests from any origin.
 - [ ] Update `SITE_URL` and `PORTAL_URL` to your real deployed site/portal
       URLs — used to build the redirect links after Square checkouts.
 - [ ] Update `../admin/js/config.js` to point at the deployed API URL.
@@ -930,8 +931,31 @@ switch.
 - [ ] Rotate `JWT_SECRET` and `ENCRYPTION_KEY` from the local dev values
       before going live (rotating `ENCRYPTION_KEY` after mail settings are
       already saved means re-entering the SMTP password from the dashboard).
-- [ ] Switch Square to production credentials and a production webhook
-      subscription (see above) — sandbox payments aren't real money.
+- [ ] Load the membership tiers and payment page text: run
+      `psql "$PROD_DATABASE_URL" -f db/payment-settings.sql` ONCE, right after
+      `homepage-content.sql`. Same one-time rule — it overwrites tier
+      prices/renewal rules and the payment page text, so don't re-run it after
+      launch. It does NOT include the Square mode/links or any credentials.
+- [ ] Switch Square to production (sandbox payments aren't real money):
+      - Square account activated for live payments, with a bank account linked.
+      - In the Developer Dashboard open your app, flip the toggle to
+        **Production**, and copy the Production access token and location ID.
+      - Host env vars: `SQUARE_ENVIRONMENT=production`, `SQUARE_ACCESS_TOKEN`,
+        `SQUARE_LOCATION_ID` (sandbox and production credentials can't be mixed).
+      - Production > Webhooks > add a subscription to
+        `https://<your-api-host>/api/payments/webhook` with `payment.created` and
+        `payment.updated`; copy its signature key into
+        `SQUARE_WEBHOOK_SIGNATURE_KEY`, and set `SQUARE_WEBHOOK_URL` to that exact
+        URL. Use the permanent host address, never a tunnel URL.
+      - In Admin > Payment Page > Square Payments (superadmin), confirm the mode
+        is **Automatic (API)** — or paste the board's live payment links and use
+        links mode with **Mark paid** — and save. Dev's setting isn't carried over.
+      - Run one real $1 payment (a small tier or event), confirm it flips to
+        completed on its own, then refund it from the Square dashboard. Refunds
+        made in Square don't update the site's records.
+- [ ] Known gap: `src/index.js` doesn't call `app.set("trust proxy", 1)`, so
+      behind a host's proxy the login rate limiters see every visitor as one IP.
+      Add it before launch (small code change).
 - [ ] Update `../js/config.js`, `../portal/js/config.js`, and
       `../frontdesk/js/config.js` to point at the deployed API URL too (not
       just `../admin/js/config.js`).
