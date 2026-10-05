@@ -357,7 +357,9 @@
 
       if (result.checkout_url) {
         window.open(result.checkout_url, "_blank");
-        toast("Square checkout opened — hand the device to the guest. They'll show as pending until payment confirms.");
+        toast(result.manual_confirmation
+          ? "Square payment link opened — the guest should pay exactly " + fmtMoney(result.amount_cents || computeTotal()) + ". They'll show as pending until the board confirms the payment."
+          : "Square checkout opened — hand the device to the guest. They'll show as pending until payment confirms.");
       } else {
         showReceipt(computeTotal());
         toast("Registration recorded." + receiptMessage(result), result.receipt_status === "failed" || result.receipt_status === "not_configured");

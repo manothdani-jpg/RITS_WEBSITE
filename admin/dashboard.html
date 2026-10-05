@@ -390,6 +390,53 @@
         </form>
       </div>
 
+      <div id="square-settings-section" style="display:none;">
+        <div class="admin-topbar" style="margin-bottom:1.25rem;">
+          <div>
+            <h1 style="font-size:1.15rem;">Square Payments</h1>
+            <p>How members pay online for dues, events, and cultural registrations. Only super admins can change this.</p>
+          </div>
+        </div>
+        <div class="table-wrap" style="padding:1.75rem; margin-bottom:1.75rem;">
+          <form id="square-settings-form">
+            <div class="form-row">
+              <label for="square-mode">How members pay</label>
+              <select id="square-mode">
+                <option value="links">My own Square payment links</option>
+                <option value="api">Automatic Square checkout (API)</option>
+              </select>
+            </div>
+
+            <div id="square-links-fields">
+              <div class="form-row">
+                <label for="square-membership-link">Membership dues payment link</label>
+                <input type="url" id="square-membership-link" placeholder="https://square.link/u/…" autocomplete="off">
+              </div>
+              <div class="form-row">
+                <label for="square-event-link">Events payment link</label>
+                <input type="url" id="square-event-link" placeholder="https://square.link/u/…" autocomplete="off">
+                <p class="form-note">Also used for cultural registrations and card payments at the front desk.</p>
+              </div>
+              <p class="form-note" style="margin-bottom:1rem;">
+                Members see the exact amount they owe, then are sent to the link. A link can't tell this site who
+                paid, so payments stay <strong>pending</strong> until you confirm them with <strong>Mark paid</strong>
+                under Reports &rarr; Recent Payments (that registers the person, updates dues and the expiry date,
+                and emails them). Make sure each link lets the payer type in an amount.
+              </p>
+            </div>
+
+            <p class="form-note" id="square-api-note" style="display:none; margin-bottom:1rem;">
+              The site creates an exact-amount Square checkout for every payment, and Square confirms it
+              automatically &mdash; no manual step. This needs <code>SQUARE_ACCESS_TOKEN</code> and
+              <code>SQUARE_LOCATION_ID</code> set on the server.
+            </p>
+            <p class="form-note" id="square-api-status" style="margin-bottom:1rem;"></p>
+
+            <button type="submit" class="btn btn-primary btn-sm">Save Square Settings</button>
+          </form>
+        </div>
+      </div>
+
       <div class="admin-topbar" style="margin-bottom:1.25rem;">
         <div>
           <h1 style="font-size:1.15rem;">Membership Categories</h1>
@@ -478,7 +525,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Member</th><th>For</th><th>Amount</th><th>Status</th><th>Date</th></tr>
+            <tr><th>Member</th><th>For</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr>
           </thead>
           <tbody id="payments-tbody"></tbody>
         </table>

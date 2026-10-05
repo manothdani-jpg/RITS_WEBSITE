@@ -3,7 +3,8 @@ const rateLimit = require("express-rate-limit");
 const crypto = require("crypto");
 const db = require("../db");
 const { requireMember, requireAdmin } = require("../middleware/auth");
-const { createPaymentLink, refundPayment, WebhooksHelper } = require("../square");
+const { refundPayment, WebhooksHelper } = require("../square");
+const { createCheckout } = require("../checkout");
 const { sendEmail, formatMoney } = require("../email");
 const { computeRenewalDate } = require("../membership");
 
@@ -73,7 +74,8 @@ router.post("/checkout", checkoutLimiter, requireMember, async (req, res) => {
     const portalUrl = process.env.PORTAL_URL || "http://localhost:8420/portal";
     const redirectUrl = `${portalUrl}/payment-complete.html?payment_id=${paymentId}`;
 
-    const { checkoutUrl, squareOrderId, paymentLinkId } = await createPaymentLink({
+    const { checkoutUrl, squareOrderId, paymentLinkId, manualConfirmation } = await createCheckout({
+      kind: "membership",
       referenceId: paymentId,
       lineItems: [{ name: `RITS Membership Dues — ${category.label}`, amountCents }],
       redirectUrl,
@@ -84,7 +86,7 @@ router.post("/checkout", checkoutLimiter, requireMember, async (req, res) => {
       [squareOrderId, paymentLinkId, paymentId]
     );
 
-    res.json({ checkout_url: checkoutUrl, payment_id: paymentId });
+    res.json({ checkout_url: checkoutUrl, payment_id: paymentId, amount_cents: amountCents, manual_confirmation: manualConfirmation });
   } catch (err) {
     console.error("Failed to create Square checkout:", err);
     res.status(502).json({ error: err.message || "Could not start checkout with Square." });
@@ -200,7 +202,8 @@ router.post("/event-checkout", checkoutLimiter, requireMember, async (req, res) 
     const portalUrl = process.env.PORTAL_URL || "http://localhost:8420/portal";
     const redirectUrl = `${portalUrl}/payment-complete.html?payment_id=${paymentId}`;
 
-    const { checkoutUrl, squareOrderId, paymentLinkId } = await createPaymentLink({
+    const { checkoutUrl, squareOrderId, paymentLinkId, manualConfirmation } = await createCheckout({
+      kind: "event",
       referenceId: paymentId,
       lineItems,
       redirectUrl,
@@ -211,7 +214,7 @@ router.post("/event-checkout", checkoutLimiter, requireMember, async (req, res) 
       [squareOrderId, paymentLinkId, paymentId]
     );
 
-    res.json({ checkout_url: checkoutUrl, payment_id: paymentId, rsvp_id: rsvpId, amount_cents: amountCents });
+    res.json({ checkout_url: checkoutUrl, payment_id: paymentId, rsvp_id: rsvpId, amount_cents: amountCents, manual_confirmation: manualConfirmation });
   } catch (err) {
     console.error("Failed to create event checkout:", err);
     res.status(502).json({ error: err.message || "Could not start checkout with Square." });
@@ -298,7 +301,8 @@ router.post("/event-addon-checkout", checkoutLimiter, requireMember, async (req,
     const portalUrl = process.env.PORTAL_URL || "http://localhost:8420/portal";
     const redirectUrl = `${portalUrl}/payment-complete.html?payment_id=${paymentId}`;
 
-    const { checkoutUrl, squareOrderId, paymentLinkId } = await createPaymentLink({
+    const { checkoutUrl, squareOrderId, paymentLinkId, manualConfirmation } = await createCheckout({
+      kind: "event",
       referenceId: paymentId,
       lineItems,
       redirectUrl,
@@ -309,7 +313,7 @@ router.post("/event-addon-checkout", checkoutLimiter, requireMember, async (req,
       [squareOrderId, paymentLinkId, paymentId]
     );
 
-    res.json({ checkout_url: checkoutUrl, payment_id: paymentId, rsvp_id: rsvp.id, amount_cents: amountCents });
+    res.json({ checkout_url: checkoutUrl, payment_id: paymentId, rsvp_id: rsvp.id, amount_cents: amountCents, manual_confirmation: manualConfirmation });
   } catch (err) {
     console.error("Failed to create event add-on checkout:", err);
     res.status(502).json({ error: err.message || "Could not start checkout with Square." });
@@ -497,7 +501,10 @@ router.post("/webhook", async (req, res) => {
   res.status(200).send();
 });
 
-async function handlePaymentUpdate(squarePayment) {
+// Loads one payment with everything the completion/confirmation emails
+// need (member, event, cultural group, membership category + renewal rule).
+// `whereSql` is always an internal constant, never user input.
+async function fetchPaymentDetail(whereSql, param) {
   const { rows } = await db.query(
     `SELECT p.id, p.member_id, p.purpose, p.tier, p.rsvp_id, p.cultural_group_id, p.status, p.amount_cents, p.pending_selections,
             m.first_name, m.email,
@@ -511,10 +518,82 @@ async function handlePaymentUpdate(squarePayment) {
      LEFT JOIN events e ON e.id = p.event_id
      LEFT JOIN cultural_groups cg ON cg.id = p.cultural_group_id
      LEFT JOIN membership_categories mc ON mc.key = p.tier
-     WHERE p.square_order_id = $1`,
-    [squarePayment.order_id]
+     WHERE ${whereSql}`,
+    [param]
   );
-  const paymentRow = rows[0];
+  return rows[0];
+}
+
+// Marks a payment completed and applies its effects: registers the RSVP /
+// cultural group, applies add-on top-ups, or marks membership dues paid and
+// sets the renewal date — then sends the confirmation email. Shared by the
+// Square webhook and by an admin manually confirming a payment (used when
+// members pay through a static Square link that can't call the webhook).
+async function applyCompletedPayment(paymentRow, squarePaymentId) {
+  const isAddonTopUp = paymentRow.purpose === "event" && !!paymentRow.pending_selections;
+
+  await db.query(
+    "UPDATE payments SET status = 'completed', square_payment_id = $1 WHERE id = $2",
+    [squarePaymentId || null, paymentRow.id]
+  );
+
+  if (isAddonTopUp) {
+    for (const s of paymentRow.pending_selections) {
+      await db.query(
+        "INSERT INTO rsvp_selections (rsvp_id, pricing_option_id, quantity, amount_cents) VALUES ($1, $2, $3, $4)",
+        [paymentRow.rsvp_id, s.pricing_option_id, s.quantity, s.amount_cents]
+      );
+    }
+    await db.query(
+      "UPDATE rsvps SET amount_cents = amount_cents + $1 WHERE id = $2",
+      [paymentRow.amount_cents, paymentRow.rsvp_id]
+    );
+    await sendConfirmationEmail({
+      to: paymentRow.email,
+      subject: `Your add-on purchase for ${paymentRow.event_name} is confirmed`,
+      text: `Hi ${paymentRow.first_name || "there"},\n\nWe've received your payment of ${formatMoney(paymentRow.amount_cents)} for additional items for ${paymentRow.event_name}.\n\nRITS`,
+      html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>We've received your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for additional items for <strong>${paymentRow.event_name}</strong>.</p><p>RITS</p>`,
+    });
+  } else if (paymentRow.purpose === "event") {
+    if (paymentRow.rsvp_id) {
+      await db.query("UPDATE rsvps SET status = 'registered' WHERE id = $1", [paymentRow.rsvp_id]);
+    }
+    await sendConfirmationEmail({
+      to: paymentRow.email,
+      subject: `You're registered for ${paymentRow.event_name}`,
+      text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for ${paymentRow.event_name} has been received — you're registered!\n\nSee you there!\n\nRITS`,
+      html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for <strong>${paymentRow.event_name}</strong> has been received — you're registered!</p><p>See you there!</p><p>RITS</p>`,
+    });
+  } else if (paymentRow.purpose === "cultural_group") {
+    if (paymentRow.cultural_group_id) {
+      await db.query("UPDATE cultural_groups SET status = 'registered' WHERE id = $1", [paymentRow.cultural_group_id]);
+    }
+    const participantText = paymentRow.participant_count === 1 ? "1 participant" : `${paymentRow.participant_count} participants`;
+    await sendConfirmationEmail({
+      to: paymentRow.email,
+      subject: `Cultural group registration confirmed — ${paymentRow.cultural_group_name}`,
+      text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for "${paymentRow.cultural_group_name}"'s registration for ${paymentRow.event_name} (${participantText}) has been received. You're all set!\n\nRITS`,
+      html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for "${paymentRow.cultural_group_name}"'s registration for <strong>${paymentRow.event_name}</strong> (${participantText}) has been received. You're all set!</p><p>RITS</p>`,
+    });
+  } else {
+    // Falls back to the historical 12-months-from-payment behavior if the
+    // tier's category was deleted/renamed since the payment was created.
+    const renewalDate = computeRenewalDate(paymentRow, new Date());
+    await db.query(
+      "UPDATE members SET payment_status = 'paid', renewal_date = $1 WHERE id = $2",
+      [renewalDate.toISOString().slice(0, 10), paymentRow.member_id]
+    );
+    await sendConfirmationEmail({
+      to: paymentRow.email,
+      subject: "RITS membership payment confirmed",
+      text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for ${paymentRow.tier_label || "your"} membership dues has been received. Your membership is active through ${renewalDate.toLocaleDateString()}.\n\nThank you!\n\nRITS`,
+      html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for ${paymentRow.tier_label || "your"} membership dues has been received. Your membership is active through ${renewalDate.toLocaleDateString()}.</p><p>Thank you!</p><p>RITS</p>`,
+    });
+  }
+}
+
+async function handlePaymentUpdate(squarePayment) {
+  const paymentRow = await fetchPaymentDetail("p.square_order_id = $1", squarePayment.order_id);
   if (!paymentRow) {
     console.warn(`Webhook for unknown Square order_id: ${squarePayment.order_id}`);
     return;
@@ -527,64 +606,7 @@ async function handlePaymentUpdate(squarePayment) {
   const isAddonTopUp = paymentRow.purpose === "event" && !!paymentRow.pending_selections;
 
   if (squarePayment.status === "COMPLETED") {
-    await db.query(
-      "UPDATE payments SET status = 'completed', square_payment_id = $1 WHERE id = $2",
-      [squarePayment.id, paymentRow.id]
-    );
-
-    if (isAddonTopUp) {
-      for (const s of paymentRow.pending_selections) {
-        await db.query(
-          "INSERT INTO rsvp_selections (rsvp_id, pricing_option_id, quantity, amount_cents) VALUES ($1, $2, $3, $4)",
-          [paymentRow.rsvp_id, s.pricing_option_id, s.quantity, s.amount_cents]
-        );
-      }
-      await db.query(
-        "UPDATE rsvps SET amount_cents = amount_cents + $1 WHERE id = $2",
-        [paymentRow.amount_cents, paymentRow.rsvp_id]
-      );
-      await sendConfirmationEmail({
-        to: paymentRow.email,
-        subject: `Your add-on purchase for ${paymentRow.event_name} is confirmed`,
-        text: `Hi ${paymentRow.first_name || "there"},\n\nWe've received your payment of ${formatMoney(paymentRow.amount_cents)} for additional items for ${paymentRow.event_name}.\n\nRITS`,
-        html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>We've received your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for additional items for <strong>${paymentRow.event_name}</strong>.</p><p>RITS</p>`,
-      });
-    } else if (paymentRow.purpose === "event") {
-      if (paymentRow.rsvp_id) {
-        await db.query("UPDATE rsvps SET status = 'registered' WHERE id = $1", [paymentRow.rsvp_id]);
-      }
-      await sendConfirmationEmail({
-        to: paymentRow.email,
-        subject: `You're registered for ${paymentRow.event_name}`,
-        text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for ${paymentRow.event_name} has been received — you're registered!\n\nSee you there!\n\nRITS`,
-        html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for <strong>${paymentRow.event_name}</strong> has been received — you're registered!</p><p>See you there!</p><p>RITS</p>`,
-      });
-    } else if (paymentRow.purpose === "cultural_group") {
-      if (paymentRow.cultural_group_id) {
-        await db.query("UPDATE cultural_groups SET status = 'registered' WHERE id = $1", [paymentRow.cultural_group_id]);
-      }
-      const participantText = paymentRow.participant_count === 1 ? "1 participant" : `${paymentRow.participant_count} participants`;
-      await sendConfirmationEmail({
-        to: paymentRow.email,
-        subject: `Cultural group registration confirmed — ${paymentRow.cultural_group_name}`,
-        text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for "${paymentRow.cultural_group_name}"'s registration for ${paymentRow.event_name} (${participantText}) has been received. You're all set!\n\nRITS`,
-        html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for "${paymentRow.cultural_group_name}"'s registration for <strong>${paymentRow.event_name}</strong> (${participantText}) has been received. You're all set!</p><p>RITS</p>`,
-      });
-    } else {
-      // Falls back to the historical 12-months-from-payment behavior if the
-      // tier's category was deleted/renamed since the payment was created.
-      const renewalDate = computeRenewalDate(paymentRow, new Date());
-      await db.query(
-        "UPDATE members SET payment_status = 'paid', renewal_date = $1 WHERE id = $2",
-        [renewalDate.toISOString().slice(0, 10), paymentRow.member_id]
-      );
-      await sendConfirmationEmail({
-        to: paymentRow.email,
-        subject: "RITS membership payment confirmed",
-        text: `Hi ${paymentRow.first_name || "there"},\n\nYour payment of ${formatMoney(paymentRow.amount_cents)} for ${paymentRow.tier_label || "your"} membership dues has been received. Your membership is active through ${renewalDate.toLocaleDateString()}.\n\nThank you!\n\nRITS`,
-        html: `<p>Hi ${paymentRow.first_name || "there"},</p><p>Your payment of <strong>${formatMoney(paymentRow.amount_cents)}</strong> for ${paymentRow.tier_label || "your"} membership dues has been received. Your membership is active through ${renewalDate.toLocaleDateString()}.</p><p>Thank you!</p><p>RITS</p>`,
-      });
-    }
+    await applyCompletedPayment(paymentRow, squarePayment.id);
   } else if (["FAILED", "CANCELED"].includes(squarePayment.status)) {
     await db.query(
       "UPDATE payments SET status = $1, square_payment_id = $2 WHERE id = $3",
@@ -617,6 +639,44 @@ router.get("/", requireAdmin, async (req, res) => {
     [eventId]
   );
   res.json({ payments: rows });
+});
+
+/* ============================================================
+   POST /api/payments/:id/mark-paid — an admin confirms a pending
+   payment by hand. Needed when members pay through the board's own
+   static Square link (the site can't be told who paid), and also a
+   safety net if a webhook was ever missed. Applies exactly what the
+   webhook would: registers the RSVP/group, applies add-ons or marks
+   dues paid + sets the renewal date, and sends the confirmation email.
+   ============================================================ */
+router.post("/:id/mark-paid", requireAdmin, async (req, res) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+    return res.status(400).json({ error: "Invalid payment id" });
+  }
+  const paymentRow = await fetchPaymentDetail("p.id = $1", req.params.id);
+  if (!paymentRow) return res.status(404).json({ error: "Payment not found" });
+  if (paymentRow.status !== "pending") {
+    return res.status(409).json({ error: `This payment is already ${paymentRow.status}, so it can't be marked paid.` });
+  }
+
+  // Atomic claim so a double-click (or two admins at once) can't apply the
+  // same payment twice — only one request gets to flip pending -> completed.
+  const claim = await db.query(
+    "UPDATE payments SET status = 'completed' WHERE id = $1 AND status = 'pending' RETURNING id",
+    [paymentRow.id]
+  );
+  if (!claim.rowCount) {
+    return res.status(409).json({ error: "This payment was just confirmed by someone else." });
+  }
+
+  try {
+    await applyCompletedPayment(paymentRow, null);
+    res.json({ payment: { id: paymentRow.id, status: "completed" } });
+  } catch (err) {
+    console.error("Failed to mark payment paid:", err);
+    await db.query("UPDATE payments SET status = 'pending' WHERE id = $1", [paymentRow.id]).catch(() => {});
+    res.status(500).json({ error: "Could not mark this payment as paid." });
+  }
 });
 
 module.exports = router;

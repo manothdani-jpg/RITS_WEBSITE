@@ -143,6 +143,7 @@ psql "$DATABASE_URL" -f db/migrations/024_audit_log.sql
 psql "$DATABASE_URL" -f db/migrations/025_admin_password_reset.sql
 psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
 psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
+psql "$DATABASE_URL" -f db/migrations/028_square_payment_links.sql
 #
 # EXISTING database created before those migrations existed: instead run
 # whichever incremental migrations you're missing, in order:
@@ -172,6 +173,7 @@ psql "$DATABASE_URL" -f db/migrations/024_audit_log.sql
 psql "$DATABASE_URL" -f db/migrations/025_admin_password_reset.sql
 psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
 psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
+psql "$DATABASE_URL" -f db/migrations/028_square_payment_links.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -516,6 +518,26 @@ and POST it to `/api/payments/webhook` with an `x-square-hmacsha256-signature`
 header. What you *can't* test without real Sandbox credentials is
 `/api/payments/checkout` actually reaching Square — it fails with a clear
 "Square isn't configured yet" error until `SQUARE_ACCESS_TOKEN` is set.
+
+### Using your own Square payment links instead of the API
+
+If you don't have Square API credentials, a super admin can switch to payment
+links under **Admin → Payment Page → Square Payments**: paste one link for
+membership dues and one for events (events, cultural registrations and
+front-desk card payments all use the events link). Links must be `https://`.
+
+Because a static link can't tell the site who paid, nothing is confirmed
+automatically. The member is shown the exact amount, sent to the link, and
+their payment stays **pending** until an admin clicks **Mark paid** under
+**Reports → Recent Payments** once the money shows up in Square. Mark paid does
+exactly what the webhook would: registers the RSVP/group, applies add-ons or
+marks dues paid and sets the renewal date, and emails the confirmation. It is
+also a safety net if a webhook is ever missed in API mode. Each link should let
+the payer type in an amount, since the amount varies per registration.
+
+Switching back to **Automatic Square checkout** needs `SQUARE_ACCESS_TOKEN` and
+`SQUARE_LOCATION_ID` set on the server; the dashboard refuses to select it until
+they are. Schema: migration `028_square_payment_links.sql`.
 
 ## Mail server settings
 

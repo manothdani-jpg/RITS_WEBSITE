@@ -2,7 +2,7 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireAdmin } = require("../middleware/auth");
-const { createPaymentLink } = require("../square");
+const { createCheckout } = require("../checkout");
 const { sendEmail, formatMoney } = require("../email");
 
 const router = express.Router();
@@ -235,7 +235,8 @@ router.post("/", submitLimiter, async (req, res) => {
       amountCents: p.fee_cents,
     }));
 
-    const { checkoutUrl, squareOrderId, paymentLinkId } = await createPaymentLink({
+    const { checkoutUrl, squareOrderId, paymentLinkId, manualConfirmation } = await createCheckout({
+      kind: "event",
       referenceId: paymentId,
       lineItems,
       redirectUrl,
@@ -245,7 +246,7 @@ router.post("/", submitLimiter, async (req, res) => {
       [squareOrderId, paymentLinkId, paymentId]
     );
 
-    res.json({ checkout_url: checkoutUrl, payment_id: paymentId, group_id: groupId, amount_cents: amountCents });
+    res.json({ checkout_url: checkoutUrl, payment_id: paymentId, group_id: groupId, amount_cents: amountCents, manual_confirmation: manualConfirmation });
   } catch (err) {
     console.error("Cultural group registration failed:", err);
     res.status(502).json({ error: err.message || "Could not complete registration." });

@@ -302,6 +302,19 @@
     }
   });
 
+  // When the board takes payments through their own Square links, the site
+  // can't be told who paid — the board confirms each payment by hand. Tell the
+  // member the exact amount and what happens next before sending them off.
+  function goToCheckout(result) {
+    if (result.manual_confirmation) {
+      alert(
+        "You'll be taken to Square to pay " + fmtMoney(result.amount_cents) + ". Please enter exactly that amount.\n\n" +
+        "Your payment will show as pending until the board confirms it, and you'll get an email once it is."
+      );
+    }
+    window.location.href = result.checkout_url;
+  }
+
   /* ---------------- Events / RSVPs ---------------- */
   var pricingByEvent = {}; // event_id -> [options]
   var attendeesByEvent = {}; // event_id -> { total_count, rsvp_count, attendees }
@@ -640,7 +653,7 @@
           toast("Added!");
           renderEvents();
         } else {
-          window.location.href = bmResult.checkout_url;
+          goToCheckout(bmResult);
         }
       } catch (err) {
         toast(err.message, true);
@@ -713,7 +726,7 @@
           renderEvents();
           renderRsvpHistory();
         } else {
-          window.location.href = result.checkout_url;
+          goToCheckout(result);
         }
       } catch (err) {
         toast(err.message, true);
@@ -733,7 +746,7 @@
 
     try {
       var data = await api("/payments/checkout", { method: "POST", body: {} });
-      window.location.href = data.checkout_url;
+      goToCheckout(data);
     } catch (err) {
       errorEl.textContent = err.message;
       errorEl.style.display = "";

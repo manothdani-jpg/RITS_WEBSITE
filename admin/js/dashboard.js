@@ -111,7 +111,7 @@
       if (view === "board-roster") loadBoardRoster();
       if (view === "volunteers") loadVolunteers();
       if (view === "communications") refreshRecipientCount();
-      if (view === "payment") { loadPaymentSettings(); loadMembershipCategories(); }
+      if (view === "payment") { loadPaymentSettings(); loadMembershipCategories(); loadSquareSettings(); }
       if (view === "reports") { loadReports(); refreshEventFilter("report-event-filter").then(loadReportEventSections); }
       if (view === "front-desk") { loadDeskStaff(); loadDeskLogEventFilter(); loadDeskLog(); }
       if (view === "cultural") { refreshEventFilter("cultural-event-filter").then(function () { loadCulturalStats(); loadCulturalGroups(); }); }
@@ -1339,6 +1339,53 @@
      ============================================================ */
   var allCategories = []; // cached, refreshed on load + after any CRUD op
   var editingCategoryId = null;
+  /* ---------------- Square payment settings (superadmin) ---------------- */
+  var squareMode = document.getElementById("square-mode");
+  var squareLinksFields = document.getElementById("square-links-fields");
+  var squareApiNote = document.getElementById("square-api-note");
+
+  function updateSquareModeVisibility() {
+    var isLinks = squareMode.value === "links";
+    squareLinksFields.style.display = isLinks ? "" : "none";
+    squareApiNote.style.display = isLinks ? "none" : "";
+  }
+  squareMode.addEventListener("change", updateSquareModeVisibility);
+
+  async function loadSquareSettings() {
+    if (!isSuperAdmin) return;
+    document.getElementById("square-settings-section").style.display = "";
+    try {
+      var data = await api("/payment-settings/square");
+      squareMode.value = data.square_mode;
+      document.getElementById("square-membership-link").value = data.membership_payment_link;
+      document.getElementById("square-event-link").value = data.event_payment_link;
+      document.getElementById("square-api-status").textContent = data.api.configured
+        ? "Server API credentials: set (" + data.api.environment + " mode)."
+        : "Server API credentials: not set — automatic checkout isn't available yet.";
+      updateSquareModeVisibility();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  document.getElementById("square-settings-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    try {
+      await api("/payment-settings/square", {
+        method: "PUT",
+        body: {
+          square_mode: squareMode.value,
+          membership_payment_link: document.getElementById("square-membership-link").value.trim(),
+          event_payment_link: document.getElementById("square-event-link").value.trim(),
+        },
+      });
+      toast("Square settings saved");
+      loadSquareSettings();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
   var categoryForm = document.getElementById("category-form");
   var categoryLabelInput = document.getElementById("category-label");
   var categoryAmountInput = document.getElementById("category-amount");
@@ -1564,6 +1611,9 @@
           "<td>" + fmtMoney(p.amount_cents) + "</td>" +
           "<td><span class=\"badge " + paymentStatusBadgeClass(p.status) + "\">" + p.status + "</span></td>" +
           "<td>" + fmtDateTime(p.created_at) + "</td>" +
+          '<td class="row-actions">' + (p.status === "pending"
+            ? '<button type="button" class="btn btn-outline-dark btn-sm" data-mark-paid="' + p.id + '" data-mark-paid-label="' + escapeHtml(p.first_name + " " + p.last_name + " — " + fmtMoney(p.amount_cents)) + '">Mark paid</button>'
+            : "") + "</td>" +
           "</tr>"
         );
       }).join("");
@@ -1571,6 +1621,24 @@
       toast(err.message, true);
     }
   }
+
+  // Confirm a pending payment by hand — what the Square webhook would have
+  // done. Needed when members pay via the board's own Square links.
+  document.getElementById("payments-tbody").addEventListener("click", async function (e) {
+    var btn = e.target.closest("[data-mark-paid]");
+    if (!btn) return;
+    var label = btn.getAttribute("data-mark-paid-label");
+    if (!confirm("Mark this payment as paid?\n\n" + label + "\n\nOnly do this once you've seen the money arrive in Square. It registers the person, updates dues/expiry where relevant, and emails them a confirmation.")) return;
+    btn.disabled = true;
+    try {
+      await api("/payments/" + btn.getAttribute("data-mark-paid") + "/mark-paid", { method: "POST" });
+      toast("Payment confirmed");
+      loadReportEventSections();
+    } catch (err) {
+      toast(err.message, true);
+      btn.disabled = false;
+    }
+  });
 
   // Rebuilds an "All events / <each event>" dropdown from the events list,
   // keeping the current selection, so newly added events show up without a

@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireDesk } = require("../middleware/auth");
-const { createPaymentLink } = require("../square");
+const { createCheckout } = require("../checkout");
 const { sendEmail, formatMoney } = require("../email");
 
 const router = express.Router();
@@ -251,7 +251,8 @@ async function finalizePayment({ member, event, amountCents, lineItems, purpose,
     const paymentId = paymentRow.rows[0].id;
     const portalUrl = process.env.PORTAL_URL || "http://localhost:8420/portal";
     const redirectUrl = `${portalUrl}/payment-complete.html?payment_id=${paymentId}`;
-    const { checkoutUrl, squareOrderId, paymentLinkId } = await createPaymentLink({
+    const { checkoutUrl, squareOrderId, paymentLinkId, manualConfirmation } = await createCheckout({
+      kind: "event",
       referenceId: paymentId,
       lineItems,
       redirectUrl,
@@ -260,7 +261,7 @@ async function finalizePayment({ member, event, amountCents, lineItems, purpose,
       "UPDATE payments SET square_order_id = $1, square_payment_link_id = $2 WHERE id = $3",
       [squareOrderId, paymentLinkId, paymentId]
     );
-    return { checkout_url: checkoutUrl, payment_id: paymentId };
+    return { checkout_url: checkoutUrl, payment_id: paymentId, manual_confirmation: manualConfirmation };
   }
 
   // Manual method — desk staff has already collected payment in person.
@@ -458,14 +459,14 @@ router.post("/events/:id/add-items", async (req, res) => {
       const paymentId = paymentRow.rows[0].id;
       const portalUrl = process.env.PORTAL_URL || "http://localhost:8420/portal";
       const redirectUrl = `${portalUrl}/payment-complete.html?payment_id=${paymentId}`;
-      const { checkoutUrl, squareOrderId, paymentLinkId } = await createPaymentLink({
-        referenceId: paymentId, lineItems, redirectUrl,
+      const { checkoutUrl, squareOrderId, paymentLinkId, manualConfirmation } = await createCheckout({
+        kind: "event", referenceId: paymentId, lineItems, redirectUrl,
       });
       await db.query(
         "UPDATE payments SET square_order_id = $1, square_payment_link_id = $2 WHERE id = $3",
         [squareOrderId, paymentLinkId, paymentId]
       );
-      return res.json({ checkout_url: checkoutUrl, payment_id: paymentId, amount_cents: amountCents });
+      return res.json({ checkout_url: checkoutUrl, payment_id: paymentId, amount_cents: amountCents, manual_confirmation: manualConfirmation });
     }
 
     // Manual method — apply immediately, no webhook to wait for.

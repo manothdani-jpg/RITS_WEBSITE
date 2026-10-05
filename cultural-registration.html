@@ -424,6 +424,12 @@
       if (data.free) {
         window.location.href = "cultural-registration-complete.html?free=1";
       } else {
+        if (data.manual_confirmation) {
+          alert(
+            "You'll be taken to Square to pay " + fmtMoney(data.amount_cents) + ". Please enter exactly that amount.\n\n" +
+            "Your registration shows as pending until the board confirms your payment, and you'll get an email once it is."
+          );
+        }
         window.location.href = data.checkout_url;
       }
     } catch (err) {
