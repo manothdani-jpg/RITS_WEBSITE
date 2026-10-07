@@ -1031,6 +1031,7 @@
     "hc-pillar4-desc": "pillars.4_description",
     "hc-membership-note": "involve.membership_note",
     "hc-sponsor-note": "involve.sponsor_note",
+    "hc-bylaws-intro": "bylaws.intro",
     "hc-contact-email": "contact.email",
     "hc-contact-phone": "contact.phone",
     "hc-contact-location": "contact.location",
@@ -1119,10 +1120,58 @@
           "</div>"
         );
       }).join("");
+
+      loadBylaws();
     } catch (err) {
       toast(err.message, true);
     }
   }
+
+  async function loadBylaws() {
+    var data = await api("/bylaws");
+    document.getElementById("bylaw-empty").style.display = data.documents.length ? "none" : "";
+    document.getElementById("bylaw-tbody").innerHTML = data.documents.map(function (d) {
+      return (
+        "<tr>" +
+        "<td><strong>" + escapeHtml(d.title) + "</strong></td>" +
+        '<td><a href="' + apiOrigin + "/uploads/bylaws/" + encodeURIComponent(d.filename) + '" target="_blank" rel="noopener" style="color:var(--maroon); font-weight:600;">' +
+        escapeHtml(d.original_name || d.filename) + "</a></td>" +
+        "<td>" + fmtDate(d.created_at) + "</td>" +
+        '<td class="row-actions"><button class="icon-btn" data-delete-bylaw="' + d.id + '" aria-label="Delete ' + escapeHtml(d.title) + '">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button></td>' +
+        "</tr>"
+      );
+    }).join("");
+  }
+
+  document.getElementById("bylaw-upload-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var fileInput = document.getElementById("bylaw-file");
+    if (!fileInput.files[0]) return;
+    var formData = new FormData();
+    formData.append("document", fileInput.files[0]);
+    formData.append("title", document.getElementById("bylaw-title").value.trim());
+    try {
+      await apiUpload("/bylaws", formData);
+      toast("Document uploaded");
+      this.reset();
+      loadBylaws();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  document.getElementById("bylaw-tbody").addEventListener("click", async function (e) {
+    var btn = e.target.closest("[data-delete-bylaw]");
+    if (!btn) return;
+    if (!confirm("Remove this document from the homepage? The file will be deleted.")) return;
+    try {
+      await api("/bylaws/" + btn.getAttribute("data-delete-bylaw"), { method: "DELETE" });
+      loadBylaws();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
 
   document.getElementById("gallery-upload-form").addEventListener("submit", async function (e) {
     e.preventDefault();

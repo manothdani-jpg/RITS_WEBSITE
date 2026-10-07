@@ -14,6 +14,7 @@ const reportsRoutes = require("./routes/reports.routes");
 const paymentsRoutes = require("./routes/payments.routes");
 const siteContentRoutes = require("./routes/site-content.routes");
 const galleryRoutes = require("./routes/gallery.routes");
+const bylawsRoutes = require("./routes/bylaws.routes");
 const sponsorsRoutes = require("./routes/sponsors.routes");
 const volunteersRoutes = require("./routes/volunteers.routes");
 const membershipCategoriesRoutes = require("./routes/membership-categories.routes");
@@ -59,7 +60,7 @@ app.use(
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
-// Serve uploaded gallery photos / sponsor logos as static files.
+// Serve uploaded gallery photos / sponsor logos / bylaw documents as static files.
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 // Records every successful admin-authenticated data change — see src/audit.js.
@@ -76,6 +77,7 @@ app.use("/api/reports", reportsRoutes);
 app.use("/api/payments", paymentsRoutes);
 app.use("/api/site-content", siteContentRoutes);
 app.use("/api/gallery", galleryRoutes);
+app.use("/api/bylaws", bylawsRoutes);
 app.use("/api/sponsors", sponsorsRoutes);
 app.use("/api/volunteers", volunteersRoutes);
 app.use("/api/membership-categories", membershipCategoriesRoutes);

@@ -9,9 +9,11 @@ backend/uploads/gallery/*
 backend/uploads/sponsors/*
 backend/uploads/board/*
 backend/uploads/events/*
+backend/uploads/bylaws/*
 backend/db/backups/*
 !backend/uploads/gallery/.gitkeep
 !backend/uploads/sponsors/.gitkeep
 !backend/uploads/board/.gitkeep
 !backend/uploads/events/.gitkeep
+!backend/uploads/bylaws/.gitkeep
 !backend/db/backups/.gitkeep

@@ -39,6 +39,13 @@ except admin-account management (`../admin/` → "Admin Logins" tab and
   persistent volume/disk mounted at `uploads/`. Worth switching to object
   storage (S3, Cloudflare R2, etc.) before relying on this in production if
   your host doesn't offer persistent disks.
+- **Bylaws** (`../admin/` → "Media" → "Bylaws & Governance Documents", both
+  roles) — upload PDF or Word documents (15MB max) with a title. They're
+  stored in `uploads/bylaws/` (rows in `bylaw_documents`, migration 030) and
+  listed in a "Bylaws" section on `../index.html`, which — together with its
+  nav and footer links — stays hidden until the first document is uploaded.
+  The short intro text above the list is the `bylaws.intro` key, edited under
+  "Homepage Content" → "Bylaws".
 - **Board Roster** (`../admin/` → "Board Roster", both roles) — the public
   "Board of Directors" bios shown on `../index.html` (name, title, photo,
   years served) — **not** the same as "Admin Logins" (who can sign into
@@ -145,6 +152,7 @@ psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
 psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
 psql "$DATABASE_URL" -f db/migrations/028_square_payment_links.sql
 psql "$DATABASE_URL" -f db/migrations/029_cultural_groups_without_member.sql
+psql "$DATABASE_URL" -f db/migrations/030_bylaw_documents.sql
 #
 # EXISTING database created before those migrations existed: instead run
 # whichever incremental migrations you're missing, in order:
@@ -176,6 +184,7 @@ psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
 psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
 psql "$DATABASE_URL" -f db/migrations/028_square_payment_links.sql
 psql "$DATABASE_URL" -f db/migrations/029_cultural_groups_without_member.sql
+psql "$DATABASE_URL" -f db/migrations/030_bylaw_documents.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -355,6 +364,9 @@ dashboard) to point at the real API URL.
 | GET | `/api/sponsors` | — | Public: list sponsors |
 | POST | `/api/sponsors` | admin/board | Add a sponsor (`multipart/form-data`: `logo`, `name`, `website_url`) |
 | DELETE | `/api/sponsors/:id` | admin/board | Remove a sponsor (row + file) |
+| GET | `/api/bylaws` | — | Public: list bylaw/governance documents |
+| POST | `/api/bylaws` | admin/board | Add a document (`multipart/form-data`: `document` PDF/.doc/.docx ≤15MB, `title`) |
+| DELETE | `/api/bylaws/:id` | admin/board | Remove a document (row + file) |
 | GET | `/api/board-profiles` | — | Public: board roster (current + past) |
 | POST | `/api/board-profiles` | admin/board | Add a board profile (no photo yet) |
 | PUT | `/api/board-profiles/:id` | admin/board | Edit a profile's name/title/term/order |
@@ -449,6 +461,8 @@ are not interchangeable — each only works against its own set of routes.
   above.
 - `gallery_photos` / `sponsors` — filename (on local disk, see "Media"
   above) plus caption, or name + optional website URL.
+- `bylaw_documents` — `title`, stored `filename` (on local disk,
+  `uploads/bylaws/`) and the `original_name` it was uploaded as.
 - `board_profiles` — public board bios: `name`, `title`, `photo_filename`
   (on local disk, `uploads/board/`), `term_start_year`, `term_end_year`
   (`NULL` = currently serving), `display_order` — see "Board Roster"
@@ -927,7 +941,7 @@ switch.
       `psql "$PROD_DATABASE_URL" -f db/homepage-content.sql` ONCE. It's a
       snapshot of the dev `site_content` table and overwrites those keys, so
       never re-run it after launch or it will undo the board's later edits.
-      (Uploaded photos — board, sponsors, event flyers — live in `uploads/`,
+      (Uploaded photos and documents — board, sponsors, event flyers, bylaws — live in `uploads/`,
       not the database; copy those files to the production disk too.)
 - [ ] Enable your host's automated Postgres backups (Render, Railway, Fly.io,
       and most managed Postgres providers offer this) — don't rely solely on
@@ -990,7 +1004,7 @@ mounted at `uploads/`:
 2. From your Mac, in `backend/`:
 
 ```bash
-tar czf /tmp/rits-uploads.tgz -C uploads board sponsors gallery events
+tar czf /tmp/rits-uploads.tgz -C uploads board sponsors gallery events bylaws
 scp /tmp/rits-uploads.tgz srv-xxxx@ssh.<region>.render.com:/tmp/
 ssh srv-xxxx@ssh.<region>.render.com \
   'tar xzf /tmp/rits-uploads.tgz -C /opt/render/project/src/backend/uploads && ls /opt/render/project/src/backend/uploads/board | head'

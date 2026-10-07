@@ -184,6 +184,9 @@
             <div class="form-row full"><label for="hc-pillar4-desc">Pillar 4 — description</label><textarea id="hc-pillar4-desc" rows="2"></textarea></div>
           </div>
 
+          <div class="section-title">Bylaws</div>
+          <div class="form-row"><label for="hc-bylaws-intro">Bylaws section intro</label><textarea id="hc-bylaws-intro" rows="2" placeholder="Short text shown above the bylaw documents. Upload the documents under Media."></textarea></div>
+
           <div class="section-title">Get Involved</div>
           <div class="form-row"><label for="hc-membership-note">Membership fee note</label><input id="hc-membership-note"></div>
           <div class="form-row"><label for="hc-sponsor-note">Sponsorship note</label><input id="hc-sponsor-note"></div>
@@ -205,12 +208,12 @@
       </div>
     </section>
 
-    <!-- ==================== Media view (gallery + sponsors) ==================== -->
+    <!-- ==================== Media view (gallery + sponsors + bylaws) ==================== -->
     <section id="view-media" style="display:none;">
       <div class="admin-topbar">
         <div>
           <h1>Media</h1>
-          <p>Gallery photos and sponsor logos shown on the homepage.</p>
+          <p>Gallery photos, sponsor logos and bylaw documents shown on the homepage.</p>
         </div>
       </div>
 
@@ -235,6 +238,23 @@
         </form>
         <div id="sponsor-media-grid" class="media-grid"></div>
         <div class="empty-note" id="sponsor-media-empty" style="display:none;">No sponsors added yet.</div>
+      </div>
+
+      <div class="table-wrap" style="padding:1.75rem; margin-top:1.75rem;">
+        <div class="section-title" style="margin-top:0;">Bylaws &amp; Governance Documents</div>
+        <p class="form-note" style="margin-bottom:1rem;">Shown in a "Bylaws" section on the homepage (it appears once the first document is uploaded). PDF or Word files, up to 15MB. The short intro text above the documents is edited under Homepage Content.</p>
+        <form id="bylaw-upload-form" class="add-family-row" style="margin-bottom:1.5rem; flex-wrap:wrap;">
+          <input type="file" id="bylaw-file" accept="application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required style="flex:1; min-width:200px;">
+          <input type="text" id="bylaw-title" placeholder="Title, e.g. RITS Bylaws (2024)" required style="flex:1; min-width:200px;">
+          <button type="submit" class="btn btn-primary btn-sm">Upload Document</button>
+        </form>
+        <div class="table-wrap" style="box-shadow:none; padding:0;">
+          <table>
+            <thead><tr><th>Title</th><th>File</th><th>Uploaded</th><th></th></tr></thead>
+            <tbody id="bylaw-tbody"></tbody>
+          </table>
+        </div>
+        <div class="empty-note" id="bylaw-empty" style="display:none;">No documents uploaded yet — the Bylaws section stays hidden on the homepage until you add one.</div>
       </div>
     </section>
 

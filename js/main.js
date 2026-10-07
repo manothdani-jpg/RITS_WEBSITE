@@ -307,6 +307,39 @@
     }
   })();
 
+  /* ---------------- Bylaw documents (from admin uploads) ---------------- */
+  (async function loadBylaws() {
+    var section = document.getElementById("bylaws");
+    var list = document.getElementById("bylaw-list");
+    if (!section || !list) return;
+    try {
+      var apiBase = window.RITS_API_BASE || "";
+      var apiOrigin = apiBase.replace(/\/api\/?$/, "");
+      var res = await fetch(apiBase + "/bylaws");
+      if (!res.ok) return;
+      var data = await res.json();
+      if (!data.documents.length) return; // nothing uploaded — section stays hidden
+
+      list.innerHTML = data.documents.map(function (d) {
+        var ext = (d.filename.split(".").pop() || "").toUpperCase();
+        return (
+          '<li><a class="doc-card" href="' + apiOrigin + "/uploads/bylaws/" + encodeURIComponent(d.filename) + '" target="_blank" rel="noopener">' +
+          '<span class="doc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>' +
+          '<span class="doc-body"><span class="doc-title">' + escapeHtmlLite(d.title) + '</span>' +
+          '<span class="doc-meta">' + ext + " &middot; Click to open</span></span>" +
+          "</a></li>"
+        );
+      }).join("");
+      section.style.display = "";
+      var navItem = document.getElementById("nav-bylaws");
+      if (navItem) navItem.style.display = "";
+      var footerItem = document.getElementById("footer-bylaws");
+      if (footerItem) footerItem.style.display = "";
+    } catch (err) {
+      // Backend not running — the section stays hidden.
+    }
+  })();
+
   /* ---------------- Board of Directors (from admin roster) ---------------- */
   (async function loadBoard() {
     var currentGrid = document.getElementById("board-current-grid");
