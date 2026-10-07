@@ -508,6 +508,8 @@ async function fetchPaymentDetail(whereSql, param) {
   const { rows } = await db.query(
     `SELECT p.id, p.member_id, p.purpose, p.tier, p.rsvp_id, p.cultural_group_id, p.status, p.amount_cents, p.pending_selections,
             m.first_name, m.email,
+            m.payment_status AS member_payment_status,
+            to_char(m.renewal_date, 'YYYY-MM-DD') AS member_renewal_date,
             e.name AS event_name,
             cg.group_name AS cultural_group_name,
             (SELECT COUNT(*) FROM cultural_group_participants WHERE group_id = p.cultural_group_id)::int AS participant_count,
@@ -578,7 +580,14 @@ async function applyCompletedPayment(paymentRow, squarePaymentId) {
   } else {
     // Falls back to the historical 12-months-from-payment behavior if the
     // tier's category was deleted/renamed since the payment was created.
-    const renewalDate = computeRenewalDate(paymentRow, new Date());
+    // A member who renews while still covered gets the new term added onto
+    // their current expiry date instead of losing the time they have left.
+    let renewFrom = new Date();
+    if (paymentRow.member_payment_status === "paid" && paymentRow.member_renewal_date) {
+      const currentExpiry = new Date(paymentRow.member_renewal_date + "T00:00:00Z");
+      if (currentExpiry > renewFrom) renewFrom = currentExpiry;
+    }
+    const renewalDate = computeRenewalDate(paymentRow, renewFrom);
     await db.query(
       "UPDATE members SET payment_status = 'paid', renewal_date = $1 WHERE id = $2",
       [renewalDate.toISOString().slice(0, 10), paymentRow.member_id]

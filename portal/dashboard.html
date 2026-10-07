@@ -27,14 +27,22 @@
       <h1 id="profile-name">&mdash;</h1>
       <p id="profile-email">&mdash;</p>
     </div>
-    <div class="badge-row">
-      <span class="badge badge-tier" id="profile-tier">&mdash;</span>
-      <span class="badge" id="profile-status">&mdash;</span>
-      <button class="btn btn-primary btn-sm" id="pay-now-btn">Pay Dues Online</button>
-    </div>
   </div>
-  <p class="hint" id="profile-expiry" style="margin:-0.75rem 0 1rem;"></p>
-  <p class="form-note" id="pay-now-error" style="display:none; color:var(--maroon); margin:-0.5rem 0 1.5rem;"></p>
+
+  <!-- ==================== Membership ==================== -->
+  <section class="portal-card" id="membership-card">
+    <h2>My Membership</h2>
+    <div class="membership-grid">
+      <div class="membership-item"><span class="m-label">Status</span><span class="badge" id="ms-status">&mdash;</span></div>
+      <div class="membership-item"><span class="m-label">Plan</span><strong id="ms-tier">&mdash;</strong></div>
+      <div class="membership-item"><span class="m-label">Valid until</span><strong id="ms-expiry">&mdash;</strong><small id="ms-days"></small></div>
+    </div>
+    <p class="hint" id="ms-note" style="margin:1rem 0 0;"></p>
+    <div style="margin-top:1.1rem;">
+      <button class="btn btn-primary btn-sm" id="pay-now-btn">Renew Membership</button>
+    </div>
+    <p class="form-note" id="pay-now-error" style="display:none; color:var(--maroon); margin:.75rem 0 0;"></p>
+  </section>
 
   <!-- ==================== Contact info ==================== -->
   <section class="portal-card">

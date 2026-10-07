@@ -71,12 +71,16 @@
     return (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
   }
   var tierLabelMap = {};
+  var tierAmountMap = {};
   function tierLabel(t) { return tierLabelMap[t] || t; }
-  (async function loadTierLabels() {
+  var tiersReady = (async function loadTierLabels() {
     try {
       var res = await fetch(API + "/payment-settings");
       var data = await res.json();
-      (data.tiers || []).forEach(function (t) { tierLabelMap[t.key] = t.label; });
+      (data.tiers || []).forEach(function (t) {
+        tierLabelMap[t.key] = t.label;
+        tierAmountMap[t.key] = t.amount_cents;
+      });
     } catch (err) { /* fall back to raw tier key */ }
   })();
 
@@ -86,6 +90,67 @@
   var currentMember = null;
   function isActiveMember() { return currentMember && currentMember.payment_status === "paid"; }
   function priceFor(o) { return isActiveMember() ? o.member_amount_cents : o.non_member_amount_cents; }
+
+  /* ---------------- Membership status + renewal ---------------- */
+  var PAY_BTN_LABEL = "Renew Membership";
+  var EXPIRING_SOON_DAYS = 60;
+
+  function renderMembershipCard(m) {
+    var statusEl = document.getElementById("ms-status");
+    var expiryEl = document.getElementById("ms-expiry");
+    var daysEl = document.getElementById("ms-days");
+    var noteEl = document.getElementById("ms-note");
+    var btn = document.getElementById("pay-now-btn");
+
+    var amount = tierAmountMap[m.membership_tier];
+    document.getElementById("ms-tier").textContent =
+      tierLabel(m.membership_tier) + (amount ? " — " + fmtMoney(amount) + " / term" : "");
+
+    var daysLeft = null;
+    if (m.renewal_date) {
+      var today = new Date(); today.setHours(0, 0, 0, 0);
+      var end = new Date(m.renewal_date); end.setHours(0, 0, 0, 0);
+      daysLeft = Math.round((end - today) / 86400000);
+      expiryEl.textContent = fmtDate(m.renewal_date);
+      daysEl.textContent = daysLeft > 0 ? daysLeft + (daysLeft === 1 ? " day left" : " days left")
+        : daysLeft === 0 ? "expires today" : "expired " + Math.abs(daysLeft) + (Math.abs(daysLeft) === 1 ? " day ago" : " days ago");
+    } else {
+      expiryEl.textContent = "—";
+      daysEl.textContent = "";
+    }
+
+    var label, badge, note, showButton = true;
+    PAY_BTN_LABEL = "Renew Membership";
+    if (m.payment_status === "waived") {
+      label = "Waived"; badge = "badge-waived"; showButton = false;
+      note = "Your dues are waived — there's nothing to pay.";
+    } else if (m.payment_status === "paid") {
+      if (daysLeft !== null && daysLeft <= 0) {
+        label = "Expired"; badge = "badge-overdue";
+        note = "Your membership has expired. Renew to get member pricing and benefits back.";
+      } else if (daysLeft !== null && daysLeft <= EXPIRING_SOON_DAYS) {
+        label = "Expiring soon"; badge = "badge-pending";
+        note = "Your membership ends soon. Renew now and the new term is added after your current end date.";
+      } else {
+        label = "Active"; badge = "badge-paid";
+        note = daysLeft === null
+          ? "Your dues are paid. The board hasn't recorded an end date yet."
+          : "You're all set. If you renew early, the new term is added after your current end date.";
+      }
+    } else {
+      label = m.payment_status === "overdue" ? "Overdue" : "Dues unpaid";
+      badge = m.payment_status === "overdue" ? "badge-overdue" : "badge-pending";
+      note = "Pay your membership dues to activate member pricing and benefits.";
+      PAY_BTN_LABEL = "Pay Membership Dues";
+    }
+
+    statusEl.textContent = label;
+    statusEl.className = "badge " + badge;
+    daysEl.style.color = badge === "badge-overdue" ? "var(--maroon)" : "";
+    noteEl.textContent = note;
+    btn.style.display = showButton ? "" : "none";
+    btn.textContent = PAY_BTN_LABEL;
+  }
 
   /* ---------------- Load profile ---------------- */
   async function loadProfile() {
@@ -98,19 +163,8 @@
 
       document.getElementById("profile-name").textContent = m.first_name + " " + m.last_name;
       document.getElementById("profile-email").textContent = m.email;
-      document.getElementById("profile-tier").textContent = m.membership_tier;
-      var statusEl = document.getElementById("profile-status");
-      statusEl.textContent = m.payment_status;
-      statusEl.className = "badge " + statusBadgeClass(m.payment_status);
-
-      var expiryEl = document.getElementById("profile-expiry");
-      if (m.renewal_date) {
-        var expired = new Date(m.renewal_date) < new Date();
-        expiryEl.textContent = (expired ? "Membership expired " : "Membership renews/expires ") + fmtDate(m.renewal_date);
-        expiryEl.style.color = expired ? "var(--maroon)" : "";
-      } else {
-        expiryEl.textContent = "No renewal date on file yet.";
-      }
+      await tiersReady;
+      renderMembershipCard(m);
 
       document.getElementById("c-first-name").value = m.first_name;
       document.getElementById("c-last-name").value = m.last_name;
@@ -751,7 +805,7 @@
       errorEl.textContent = err.message;
       errorEl.style.display = "";
       btn.disabled = false;
-      btn.textContent = "Pay Dues Online";
+      btn.textContent = PAY_BTN_LABEL;
     }
   });
 
