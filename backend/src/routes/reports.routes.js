@@ -398,6 +398,7 @@ const AVAILABILITY_LABELS = { event_specific: "Event-specific", all_time: "All-t
 async function getVolunteersReport(eventId) {
   const { rows } = await db.query(
     `SELECT v.id, v.first_name, v.last_name, v.email, v.phone, v.availability, v.interests, v.status, v.created_at,
+            EXISTS (SELECT 1 FROM members m WHERE lower(m.email) = lower(v.email) AND ${activeMemberSql("m.")}) AS is_member,
             COALESCE(
               (SELECT json_agg(json_build_object('id', e.id, 'name', e.name) ORDER BY e.event_date)
                FROM volunteer_events ve JOIN events e ON e.id = ve.event_id
@@ -414,6 +415,7 @@ async function getVolunteersReport(eventId) {
   );
   const totals = {
     total: rows.length,
+    members: rows.filter((v) => v.is_member).length,
     all_time: rows.filter((v) => v.availability === "all_time").length,
     event_specific: rows.filter((v) => v.availability === "event_specific").length,
     not_specified: rows.filter((v) => !v.availability).length,
@@ -436,6 +438,7 @@ function addVolunteerSheet(workbook, volunteers) {
       { header: "Name", key: "name", width: 26 },
       { header: "Email", key: "email", width: 30 },
       { header: "Phone", key: "phone", width: 16 },
+      { header: "RITS Member", key: "member_label", width: 13 },
       { header: "Availability", key: "availability_label", width: 16 },
       { header: "Events", key: "event_names", width: 36 },
       { header: "Interests", key: "interest_labels", width: 44 },
@@ -445,6 +448,7 @@ function addVolunteerSheet(workbook, volunteers) {
     volunteers.map((v) => ({
       ...v,
       name: `${v.first_name} ${v.last_name}`,
+      member_label: v.is_member ? "Member" : "Non-member",
       availability_label: AVAILABILITY_LABELS[v.availability] || "",
       event_names: v.events.map((e) => e.name).join("; "),
       interest_labels: (v.interests || []).map((i) => INTEREST_LABELS[i] || i).join("; "),

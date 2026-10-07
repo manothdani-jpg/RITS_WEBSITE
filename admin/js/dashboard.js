@@ -1822,7 +1822,7 @@
     try {
       var data = await api("/reports/volunteers" + reportEventQuery());
       var t = data.totals;
-      var stats = [["Volunteers", t.total], ["All-time", t.all_time], ["Event-specific", t.event_specific]];
+      var stats = [["Volunteers", t.total], ["Members", t.members], ["All-time", t.all_time], ["Event-specific", t.event_specific]];
       if (t.not_specified) stats.push(["Not specified", t.not_specified]);
       document.getElementById("report-volunteer-stats").innerHTML = stats.map(function (s) {
         return '<div class="stat-card"><strong>' + s[1] + "</strong><span>" + s[0] + "</span></div>";
@@ -1836,6 +1836,7 @@
           "<td>" + escapeHtml(v.first_name + " " + v.last_name) + "</td>" +
           "<td>" + escapeHtml(v.email) + "</td>" +
           "<td>" + escapeHtml(v.phone || "—") + "</td>" +
+          "<td>" + memberBadge(v.is_member) + "</td>" +
           "<td>" + volunteerAvailabilityHtml(v) + "</td>" +
           "<td>" + escapeHtml(interests) + "</td>" +
           '<td><span class="badge ' + volunteerStatusBadgeClass(v.status) + '">' + escapeHtml(v.status) + "</span></td>" +
