@@ -263,6 +263,7 @@ router.get("/", requireAdmin, async (req, res) => {
   const eventId = req.query.event_id || null;
   const { rows } = await db.query(
     `SELECT cg.*, e.name AS event_name,
+            EXISTS (SELECT 1 FROM members cm WHERE lower(cm.email) = lower(cg.choreographer_email) AND ${activeMemberSql("cm.")}) AS choreographer_is_member,
             COUNT(p.id)::int AS participant_count,
             COUNT(*) FILTER (WHERE p.is_member)::int AS member_count,
             COUNT(*) FILTER (WHERE p.age_category = 'kid')::int AS kid_count
@@ -280,7 +281,9 @@ router.get("/", requireAdmin, async (req, res) => {
 // GET /api/cultural-groups/:id — one group's full participant list.
 router.get("/:id", requireAdmin, async (req, res) => {
   const groupResult = await db.query(
-    `SELECT cg.*, e.name AS event_name FROM cultural_groups cg JOIN events e ON e.id = cg.event_id WHERE cg.id = $1`,
+    `SELECT cg.*, e.name AS event_name,
+            EXISTS (SELECT 1 FROM members cm WHERE lower(cm.email) = lower(cg.choreographer_email) AND ${activeMemberSql("cm.")}) AS choreographer_is_member
+     FROM cultural_groups cg JOIN events e ON e.id = cg.event_id WHERE cg.id = $1`,
     [req.params.id]
   );
   if (!groupResult.rows[0]) return res.status(404).json({ error: "Group not found" });

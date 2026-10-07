@@ -1821,7 +1821,7 @@
           '<span class="badge ' + statusClass + '" style="align-self:center;">' + escapeHtml(g.status.replace("_", " ")) + "</span>" +
           "</div>" +
           '<p class="empty-note" style="padding:.6rem 0 0; margin:0;">Choreographer/Coordinator: ' + escapeHtml(g.choreographer_name) +
-          " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ")</p>" +
+          " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ") " + memberBadge(g.choreographer_is_member) + "</p>" +
           participantsTable +
           "</div>"
         );
@@ -2119,6 +2119,7 @@
           "<td>" + escapeHtml(g.event_name) + "</td>" +
           "<td>" + (PERFORMANCE_TYPE_LABELS[g.performance_type] || g.performance_type) + "</td>" +
           "<td>" + escapeHtml(g.choreographer_name) + "</td>" +
+          "<td>" + memberBadge(g.choreographer_is_member) + "</td>" +
           "<td>" + g.participant_count + "</td>" +
           "<td>" + fmtMoney(g.amount_cents) + "</td>" +
           '<td><span class="badge ' + (g.status === "registered" ? "badge-paid" : g.status === "cancelled" ? "badge-tier" : "badge-pending") + '">' + escapeHtml(g.status.replace("_", " ")) + "</span></td>" +
@@ -2144,7 +2145,7 @@
       document.getElementById("cultural-group-modal-title").textContent = g.group_name;
       document.getElementById("cultural-group-info").innerHTML =
         escapeHtml(g.event_name) + " &middot; " + (PERFORMANCE_TYPE_LABELS[g.performance_type] || g.performance_type) + "<br>" +
-        "Choreographer/Coordinator: " + escapeHtml(g.choreographer_name) + " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ")" +
+        "Choreographer/Coordinator: " + escapeHtml(g.choreographer_name) + " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ") " + memberBadge(g.choreographer_is_member) +
         (g.description ? "<br>" + escapeHtml(g.description) : "") +
         "<br>Total: " + fmtMoney(g.amount_cents) + " &middot; Status: " + escapeHtml(g.status.replace("_", " "));
 

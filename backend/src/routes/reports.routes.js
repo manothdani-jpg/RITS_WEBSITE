@@ -271,6 +271,7 @@ async function getCulturalGroupsDetailed(eventId, { excludeCancelled }) {
     `SELECT cg.id, cg.event_id, e.name AS event_name, e.event_date,
             cg.group_name, cg.performance_type, cg.description,
             cg.choreographer_name, cg.choreographer_email, cg.choreographer_phone,
+            EXISTS (SELECT 1 FROM members cm WHERE lower(cm.email) = lower(cg.choreographer_email) AND ${activeMemberSql("cm.")}) AS choreographer_is_member,
             cg.amount_cents, cg.status, cg.created_at
      FROM cultural_groups cg JOIN events e ON e.id = cg.event_id
      WHERE ($1::uuid IS NULL OR cg.event_id = $1)
@@ -321,6 +322,7 @@ function addCulturalSheets(workbook, groups) {
       { header: "Choreographer / Coordinator", key: "choreographer_name", width: 26 },
       { header: "Email", key: "choreographer_email", width: 30 },
       { header: "Phone", key: "choreographer_phone", width: 16 },
+      { header: "Choreographer Membership", key: "choreographer_membership", width: 24 },
       { header: "Participant Count", key: "participant_count", width: 16 },
       { header: "Members", key: "member_count", width: 10 },
       { header: "Kids", key: "kid_count", width: 8 },
@@ -333,6 +335,7 @@ function addCulturalSheets(workbook, groups) {
     groups.map((g) => ({
       ...g,
       type: PERFORMANCE_TYPE_LABELS[g.performance_type] || g.performance_type,
+      choreographer_membership: g.choreographer_is_member ? "Member" : "Non-member",
       participant_count: g.participants.length,
       member_count: g.participants.filter((p) => p.is_member).length,
       kid_count: g.participants.filter((p) => p.age_category === "kid").length,
