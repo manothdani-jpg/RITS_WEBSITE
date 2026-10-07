@@ -502,6 +502,14 @@ it `completed`, and flips the member's `payment_status` to `paid` with
 `renewal_date` set one year out. It's idempotent — Square retries webhooks,
 and replays of an already-completed payment are no-ops.
 
+**Marking a member paid by hand:** when an admin adds a member as paid, or
+changes one to paid from another status, in the admin Members form without
+entering a renewal date, the date is filled in from that tier's renewal rule
+(counting from today) — the same way an online payment sets it. A date typed
+in always wins, and saving someone who is already paid never changes their
+date. (Members marked paid by hand before this existed had no date and were
+backfilled once.)
+
 ### Setting it up
 
 1. Create a Square account at [squareup.com](https://squareup.com) if you

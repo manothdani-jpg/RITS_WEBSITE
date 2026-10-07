@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireAdmin, requireMember } = require("../middleware/auth");
-const { activeMemberSql } = require("../membership");
+const { activeMemberSql, computeRenewalDate } = require("../membership");
 
 const router = express.Router();
 
@@ -17,6 +17,22 @@ function stripSecrets(member) {
   delete member.reset_token_hash;
   delete member.reset_token_expires_at;
   return member;
+}
+
+// When an admin marks a member paid by hand there's no Square payment to set
+// their renewal date, so derive it the same way an online payment would: from
+// the tier's renewal rule, counting from today (the database's date, so it
+// doesn't tick over early in the evening like a UTC "now" would).
+async function defaultRenewalDate(tier) {
+  const [category, today] = await Promise.all([
+    db.query(
+      "SELECT renewal_type, renewal_months, renewal_month, renewal_day FROM membership_categories WHERE key = $1",
+      [tier]
+    ),
+    db.query("SELECT to_char(current_date, 'YYYY-MM-DD') AS d"),
+  ]);
+  const from = new Date(today.rows[0].d + "T00:00:00Z");
+  return computeRenewalDate(category.rows[0] || null, from).toISOString().slice(0, 10);
 }
 
 async function sanitizeMemberInput(body, { partial = false, activeCategoriesOnly = false } = {}) {
@@ -307,6 +323,9 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    if (data.payment_status === "paid" && !data.renewal_date) {
+      data.renewal_date = await defaultRenewalDate(data.membership_tier || "individual");
+    }
     const { rows } = await db.query(
       `INSERT INTO members
         (first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, membership_tier, payment_status, renewal_date, notes)
@@ -342,11 +361,29 @@ router.put("/:id", async (req, res) => {
   const keys = Object.keys(data);
   if (keys.length === 0) return res.status(400).json({ error: "No fields to update" });
 
-  const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
-  const values = keys.map((k) => data[k]);
-  values.push(req.params.id);
-
   try {
+    // Marking a member paid (when they weren't already) with no renewal date
+    // on file or in this edit: fill it in from their tier's renewal rule.
+    // An explicitly entered date always wins, and editing someone who is
+    // already paid never changes their date behind the admin's back.
+    if (data.payment_status === "paid") {
+      const existing = await db.query(
+        "SELECT payment_status, renewal_date, membership_tier FROM members WHERE id = $1",
+        [req.params.id]
+      );
+      const before = existing.rows[0];
+      const effectiveDate = "renewal_date" in data ? data.renewal_date : before && before.renewal_date;
+      if (before && before.payment_status !== "paid" && !effectiveDate) {
+        data.renewal_date = await defaultRenewalDate(data.membership_tier || before.membership_tier);
+        keys.push("renewal_date");
+      }
+    }
+
+    const uniqueKeys = [...new Set(keys)];
+    const setClause = uniqueKeys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+    const values = uniqueKeys.map((k) => data[k]);
+    values.push(req.params.id);
+
     const { rows } = await db.query(
       `UPDATE members SET ${setClause} WHERE id = $${values.length} RETURNING *`,
       values
