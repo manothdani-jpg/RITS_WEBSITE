@@ -531,7 +531,7 @@
       <div class="admin-topbar" style="margin-bottom:1.25rem;">
         <div>
           <h1 style="font-size:1.15rem;">Event Details</h1>
-          <p>Pick an event to focus the payments, registrations, and cultural groups below on just that event, then export exactly what you see to Excel.</p>
+          <p>Pick an event to focus the payments, registrations, cultural groups, and volunteers below on just that event, then export exactly what you see to Excel.</p>
         </div>
         <div class="topbar-actions">
           <select id="report-event-filter" style="min-width:220px;">
@@ -576,6 +576,23 @@
       <div id="report-cultural-types" class="pill-list" style="margin-bottom:1.25rem;"></div>
       <div id="report-cultural-list"></div>
       <div class="empty-state" id="report-cultural-empty" style="display:none;">No cultural group registrations for this selection.</div>
+
+      <div class="admin-topbar" style="margin:1.75rem 0 1.25rem;">
+        <div>
+          <h1 style="font-size:1.15rem;">Volunteers</h1>
+          <p>Volunteer signups. With an event selected: everyone who offered to help at that event, plus everyone available all the time. Signups from before availability was asked appear only under "All events".</p>
+        </div>
+      </div>
+      <div class="stat-row" id="report-volunteer-stats"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Phone</th><th>Availability</th><th>Interests</th><th>Status</th><th>Signed Up</th></tr>
+          </thead>
+          <tbody id="report-volunteers-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="report-volunteers-empty" style="display:none;">No volunteers for this selection.</div>
+      </div>
     </section>
 
     <!-- ==================== Front Desk view ==================== -->

@@ -1714,6 +1714,7 @@
     loadPayments();
     loadRsvpBreakdown();
     loadReportCultural();
+    loadReportVolunteers();
   }
   reportEventFilter.addEventListener("change", loadReportEventSections);
 
@@ -1809,6 +1810,37 @@
           optionsTable +
           renderRegistrantsTable(ev.registrants) +
           "</div>"
+        );
+      }).join("");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function loadReportVolunteers() {
+    var tbody = document.getElementById("report-volunteers-tbody");
+    try {
+      var data = await api("/reports/volunteers" + reportEventQuery());
+      var t = data.totals;
+      var stats = [["Volunteers", t.total], ["All-time", t.all_time], ["Event-specific", t.event_specific]];
+      if (t.not_specified) stats.push(["Not specified", t.not_specified]);
+      document.getElementById("report-volunteer-stats").innerHTML = stats.map(function (s) {
+        return '<div class="stat-card"><strong>' + s[1] + "</strong><span>" + s[0] + "</span></div>";
+      }).join("");
+
+      document.getElementById("report-volunteers-empty").style.display = data.volunteers.length ? "none" : "";
+      tbody.innerHTML = data.volunteers.map(function (v) {
+        var interests = (v.interests || []).map(function (i) { return INTEREST_LABELS[i] || i; }).join(", ") || "—";
+        return (
+          "<tr>" +
+          "<td>" + escapeHtml(v.first_name + " " + v.last_name) + "</td>" +
+          "<td>" + escapeHtml(v.email) + "</td>" +
+          "<td>" + escapeHtml(v.phone || "—") + "</td>" +
+          "<td>" + volunteerAvailabilityHtml(v) + "</td>" +
+          "<td>" + escapeHtml(interests) + "</td>" +
+          '<td><span class="badge ' + volunteerStatusBadgeClass(v.status) + '">' + escapeHtml(v.status) + "</span></td>" +
+          "<td>" + fmtDate(v.created_at) + "</td>" +
+          "</tr>"
         );
       }).join("");
     } catch (err) {

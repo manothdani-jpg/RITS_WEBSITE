@@ -378,6 +378,80 @@ function addCulturalSheets(workbook, groups) {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/* ---------------- Volunteers ---------------- */
+
+const INTEREST_LABELS = {
+  event_planning: "Event planning & setup",
+  teaching: "Teaching Tamil classes",
+  youth_wing: "Youth wing",
+  hospitality: "Hospitality / day-of support",
+  media: "Photography / media",
+  fundraising: "Fundraising & sponsorship",
+  other: "Other",
+};
+const AVAILABILITY_LABELS = { event_specific: "Event-specific", all_time: "All-time" };
+
+// Volunteer signups for the Reports page and its Excel export. With an event
+// selected: everyone who offered to help at that event plus everyone available
+// all the time. Signups from before availability was asked (NULL) can't be
+// placed against an event, so they only appear in the all-events view.
+async function getVolunteersReport(eventId) {
+  const { rows } = await db.query(
+    `SELECT v.id, v.first_name, v.last_name, v.email, v.phone, v.availability, v.interests, v.status, v.created_at,
+            COALESCE(
+              (SELECT json_agg(json_build_object('id', e.id, 'name', e.name) ORDER BY e.event_date)
+               FROM volunteer_events ve JOIN events e ON e.id = ve.event_id
+               WHERE ve.volunteer_id = v.id),
+              '[]'::json
+            ) AS events
+     FROM volunteers v
+     WHERE $1::uuid IS NULL
+        OR v.availability = 'all_time'
+        OR (v.availability = 'event_specific'
+            AND EXISTS (SELECT 1 FROM volunteer_events ve WHERE ve.volunteer_id = v.id AND ve.event_id = $1))
+     ORDER BY v.created_at DESC`,
+    [eventId]
+  );
+  const totals = {
+    total: rows.length,
+    all_time: rows.filter((v) => v.availability === "all_time").length,
+    event_specific: rows.filter((v) => v.availability === "event_specific").length,
+    not_specified: rows.filter((v) => !v.availability).length,
+  };
+  return { totals, volunteers: rows };
+}
+
+// GET /api/reports/volunteers?event_id= — volunteers for the Reports page.
+router.get("/volunteers", async (req, res) => {
+  const parsed = readEventId(req, res);
+  if (!parsed) return;
+  res.json(await getVolunteersReport(parsed.eventId));
+});
+
+function addVolunteerSheet(workbook, volunteers) {
+  addSheet(
+    workbook,
+    "Volunteers",
+    [
+      { header: "Name", key: "name", width: 26 },
+      { header: "Email", key: "email", width: 30 },
+      { header: "Phone", key: "phone", width: 16 },
+      { header: "Availability", key: "availability_label", width: 16 },
+      { header: "Events", key: "event_names", width: 36 },
+      { header: "Interests", key: "interest_labels", width: 44 },
+      { header: "Status", key: "status", width: 12 },
+      { header: "Signed Up", key: "created_at", width: 18, type: "date" },
+    ],
+    volunteers.map((v) => ({
+      ...v,
+      name: `${v.first_name} ${v.last_name}`,
+      availability_label: AVAILABILITY_LABELS[v.availability] || "",
+      event_names: v.events.map((e) => e.name).join("; "),
+      interest_labels: (v.interests || []).map((i) => INTEREST_LABELS[i] || i).join("; "),
+    }))
+  );
+}
+
 // GET /api/reports/cultural.xlsx?event_id= — the Cultural Events tab's
 // current selection as an Excel file (groups + participants sheets).
 router.get("/cultural.xlsx", async (req, res) => {
@@ -396,7 +470,7 @@ router.get("/cultural.xlsx", async (req, res) => {
 
 // GET /api/reports/event-report.xlsx?event_id= — everything on the Reports
 // page's event sections for the current selection: registrations by event,
-// by pricing option, by registrant, payments, and cultural groups.
+// by pricing option, by registrant, payments, cultural groups, and volunteers.
 router.get("/event-report.xlsx", async (req, res) => {
   const parsed = readEventId(req, res);
   if (!parsed) return;
@@ -505,6 +579,7 @@ router.get("/event-report.xlsx", async (req, res) => {
     );
 
     addCulturalSheets(workbook, await getCulturalGroupsDetailed(eventId, { excludeCancelled: true }));
+    addVolunteerSheet(workbook, (await getVolunteersReport(eventId)).volunteers);
 
     await sendWorkbook(res, workbook, `rits-event-report-${today()}.xlsx`);
   } catch (err) {
