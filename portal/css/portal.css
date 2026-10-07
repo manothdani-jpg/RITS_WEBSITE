@@ -50,6 +50,7 @@ body{ background:var(--cream); min-height:100vh; }
 .badge-waived{ background:color-mix(in srgb, var(--teal) 14%, transparent); color:var(--teal); }
 .badge-tier{ background:color-mix(in srgb, var(--ink) 8%, transparent); color:var(--ink); }
 .badge-row{ display:flex; gap:.5rem; flex-wrap:wrap; }
+.btn:disabled{ opacity:.45; cursor:not-allowed; box-shadow:none; }
 .membership-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem 1.5rem; margin-top:.75rem; }
 .membership-item{ display:flex; flex-direction:column; align-items:flex-start; gap:.3rem; }
 .membership-item .m-label{ font-size:.72rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-soft); }

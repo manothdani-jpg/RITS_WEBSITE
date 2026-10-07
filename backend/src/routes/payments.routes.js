@@ -6,7 +6,7 @@ const { requireMember, requireAdmin } = require("../middleware/auth");
 const { refundPayment, WebhooksHelper } = require("../square");
 const { createCheckout } = require("../checkout");
 const { sendEmail, formatMoney } = require("../email");
-const { computeRenewalDate, activeMemberSql } = require("../membership");
+const { computeRenewalDate, activeMemberSql, renewalLockedSql, renewalOpensOnSql, RENEWAL_WINDOW_DAYS } = require("../membership");
 
 const router = express.Router();
 
@@ -48,9 +48,19 @@ const checkoutLimiter = rateLimit({
    ============================================================ */
 router.post("/checkout", checkoutLimiter, requireMember, async (req, res) => {
   try {
-    const memberResult = await db.query("SELECT id, membership_tier FROM members WHERE id = $1", [req.member.sub]);
+    const memberResult = await db.query(
+      `SELECT id, membership_tier, ${renewalLockedSql()} AS renewal_locked, ${renewalOpensOnSql()} AS renewal_opens_on
+       FROM members WHERE id = $1`,
+      [req.member.sub]
+    );
     const member = memberResult.rows[0];
     if (!member) return res.status(404).json({ error: "Member not found" });
+    if (member.renewal_locked) {
+      const opensOn = new Date(member.renewal_opens_on + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      return res.status(400).json({
+        error: `Your membership isn't due for renewal yet. You can renew online from ${opensOn} (${RENEWAL_WINDOW_DAYS} days before it ends).`,
+      });
+    }
 
     const tier = (req.body && req.body.tier) || member.membership_tier;
     const categoryResult = await db.query("SELECT label, amount_cents FROM membership_categories WHERE key = $1", [tier]);

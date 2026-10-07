@@ -486,12 +486,21 @@ See `db/schema.sql` for the full schema (fresh installs), or
 
 ## Online dues payment (Square)
 
-Members pay from `../portal/dashboard.html` ("Pay Dues Online") — it POSTs
+Members pay from the "My Membership" card on `../portal/dashboard.html`
+("Renew Membership" / "Pay Membership Dues") — it POSTs
 to `/api/payments/checkout`, which creates a Square-hosted checkout page
 (Payment Links API) for their tier's current dues amount and redirects them
 there. After paying, Square redirects back to
 `../portal/payment-complete.html`, which polls `/api/payments/me` until the
 payment shows `completed`.
+
+**Renewal window:** a paid member can only renew online within 60 days of
+their end date (`RENEWAL_WINDOW_DAYS` in `src/membership.js`). Earlier than
+that the portal's Renew button is disabled with "Renewal opens on …", and
+`/api/payments/checkout` refuses with a 400. Unpaid, overdue and expired
+members, and paid members with no end date, can always pay. Admins aren't
+restricted — Mark paid and the Members form work at any time. Renewing inside
+the window adds the new term after the current end date.
 
 **How confirmation works:** Square calls `POST /api/payments/webhook` when
 a payment completes. The handler verifies the request's HMAC signature

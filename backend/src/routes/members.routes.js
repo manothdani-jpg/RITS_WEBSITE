@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireAdmin, requireMember } = require("../middleware/auth");
-const { activeMemberSql, computeRenewalDate } = require("../membership");
+const { activeMemberSql, computeRenewalDate, renewalLockedSql, renewalOpensOnSql } = require("../membership");
 
 const router = express.Router();
 
@@ -142,7 +142,9 @@ router.post("/signup", signupLimiter, async (req, res) => {
 
 router.get("/me", requireMember, async (req, res) => {
   const { rows } = await db.query(
-    `SELECT *, ${activeMemberSql()} AS is_active_member FROM members WHERE id = $1`,
+    `SELECT *, ${activeMemberSql()} AS is_active_member,
+            ${renewalLockedSql()} AS renewal_locked, ${renewalOpensOnSql()} AS renewal_opens_on
+     FROM members WHERE id = $1`,
     [req.member.sub]
   );
   const member = rows[0];

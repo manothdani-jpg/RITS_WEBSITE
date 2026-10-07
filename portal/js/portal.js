@@ -94,7 +94,7 @@
 
   /* ---------------- Membership status + renewal ---------------- */
   var PAY_BTN_LABEL = "Renew Membership";
-  var EXPIRING_SOON_DAYS = 60;
+  var EXPIRING_SOON_DAYS = 60; // keep in step with RENEWAL_WINDOW_DAYS in backend/src/membership.js
 
   function renderMembershipCard(m) {
     var statusEl = document.getElementById("ms-status");
@@ -136,7 +136,7 @@
         label = "Active"; badge = "badge-paid";
         note = daysLeft === null
           ? "Your dues are paid. The board hasn't recorded an end date yet."
-          : "You're all set. If you renew early, the new term is added after your current end date.";
+          : "You're all set. Renewal opens on " + fmtDate(m.renewal_opens_on + "T12:00:00") + " — " + EXPIRING_SOON_DAYS + " days before your membership ends.";
       }
     } else {
       label = m.payment_status === "overdue" ? "Overdue" : "Dues unpaid";
@@ -151,6 +151,9 @@
     noteEl.textContent = note;
     btn.style.display = showButton ? "" : "none";
     btn.textContent = PAY_BTN_LABEL;
+    // Too early to renew: show the button but disabled, so it's clear when it opens up.
+    btn.disabled = !!m.renewal_locked;
+    btn.title = m.renewal_locked ? "Renewal opens on " + fmtDate(m.renewal_opens_on + "T12:00:00") : "";
   }
 
   /* ---------------- Load profile ---------------- */

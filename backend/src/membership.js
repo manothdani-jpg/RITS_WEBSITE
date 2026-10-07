@@ -31,4 +31,20 @@ function activeMemberSql(alias = "") {
   return `(${alias}payment_status = 'paid' AND (${alias}renewal_date IS NULL OR ${alias}renewal_date >= CURRENT_DATE))`;
 }
 
-module.exports = { computeRenewalDate, activeMemberSql };
+// How many days before a membership ends the member may renew it online.
+// Earlier than that the Renew button is disabled and checkout is refused.
+const RENEWAL_WINDOW_DAYS = 60;
+
+// SQL boolean: this member is paid up with an end date more than
+// RENEWAL_WINDOW_DAYS away, so it's too early to renew. Members who are
+// unpaid, expired, inside the window, or have no end date are never locked.
+function renewalLockedSql(alias = "") {
+  return `(${alias}payment_status = 'paid' AND ${alias}renewal_date IS NOT NULL AND ${alias}renewal_date > CURRENT_DATE + ${RENEWAL_WINDOW_DAYS})`;
+}
+
+// SQL: the date renewal opens (end date minus the window), as YYYY-MM-DD.
+function renewalOpensOnSql(alias = "") {
+  return `to_char(${alias}renewal_date - ${RENEWAL_WINDOW_DAYS}, 'YYYY-MM-DD')`;
+}
+
+module.exports = { computeRenewalDate, activeMemberSql, renewalLockedSql, renewalOpensOnSql, RENEWAL_WINDOW_DAYS };
