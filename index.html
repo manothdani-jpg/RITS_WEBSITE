@@ -392,6 +392,18 @@
             </div>
           </div>
           <div class="form-row">
+            <label>When can you volunteer?</label>
+            <div class="availability-choices">
+              <label class="checkbox-choice"><input type="radio" name="availability" value="event_specific" id="v-avail-event"> Specific event(s) only</label>
+              <label class="checkbox-choice"><input type="radio" name="availability" value="all_time" id="v-avail-all"> All the time — any event or ongoing</label>
+            </div>
+          </div>
+          <div class="form-row" id="v-events-row" hidden>
+            <label>Which event(s)?</label>
+            <div class="availability-choices" id="v-events-list"></div>
+            <p class="form-note" id="v-events-empty" hidden>There are no upcoming events listed yet — choose "All the time" and we'll reach out when something is planned.</p>
+          </div>
+          <div class="form-row">
             <label>I'd like to help with</label>
             <div class="checkbox-grid">
               <label class="checkbox-choice"><input type="checkbox" name="interests" value="event_planning"> Event planning &amp; setup</label>

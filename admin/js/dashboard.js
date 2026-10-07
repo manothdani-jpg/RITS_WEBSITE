@@ -1885,6 +1885,18 @@
      ============================================================ */
   var volunteerStatusFilter = document.getElementById("volunteer-filter-status");
   volunteerStatusFilter.addEventListener("change", loadVolunteers);
+  var volunteerAvailabilityFilter = document.getElementById("volunteer-filter-availability");
+  volunteerAvailabilityFilter.addEventListener("change", loadVolunteers);
+
+  function volunteerAvailabilityHtml(v) {
+    if (v.availability === "all_time") return '<span class="badge badge-paid">All-time</span>';
+    if (v.availability === "event_specific") {
+      var names = (v.events || []).map(function (e) { return escapeHtml(e.name); });
+      return '<span class="badge badge-pending">Event-specific</span>' +
+        '<div style="font-size:.8rem; color:var(--text-soft); margin-top:.3rem;">' + (names.join(", ") || "(event removed)") + "</div>";
+    }
+    return "—"; // signed up before this question existed
+  }
 
   var INTEREST_LABELS = {
     event_planning: "Event planning & setup",
@@ -1905,7 +1917,10 @@
     try {
       var data = await api("/volunteers");
       var status = volunteerStatusFilter.value;
-      var rows = status ? data.volunteers.filter(function (v) { return v.status === status; }) : data.volunteers;
+      var availability = volunteerAvailabilityFilter.value;
+      var rows = data.volunteers.filter(function (v) {
+        return (!status || v.status === status) && (!availability || v.availability === availability);
+      });
 
       empty.style.display = rows.length ? "none" : "";
       tbody.innerHTML = rows.map(function (v) {
@@ -1915,6 +1930,7 @@
           "<td>" + escapeHtml(v.first_name + " " + v.last_name) + "</td>" +
           "<td>" + escapeHtml(v.email) + "</td>" +
           "<td>" + escapeHtml(v.phone || "—") + "</td>" +
+          "<td>" + volunteerAvailabilityHtml(v) + "</td>" +
           "<td>" + escapeHtml(interests) + "</td>" +
           "<td>" + escapeHtml(v.note || "—") + "</td>" +
           "<td>" + fmtDate(v.created_at) + "</td>" +

@@ -113,8 +113,13 @@ except admin-account management (`../admin/` → "Admin Logins" tab and
   → Sign Up, a third tab alongside "Become a Member" / "General Inquiry" in
   the Contact section): name, contact info, an interest checklist (event
   planning, teaching, youth wing, hospitality, media, fundraising, other),
-  and a free-text note. A board member can filter by and update a status
-  (new → contacted → active/inactive) inline, and export everything to CSV.
+  and a free-text note. Each signup also chooses **availability** — "Specific
+  event(s) only" (and picks which upcoming event(s), at least one) or "All
+  the time" (migration 031: `volunteers.availability` plus a
+  `volunteer_events` join table; signups from before it existed show "—").
+  A board member can filter by status and by availability, update a status
+  (new → contacted → active/inactive) inline, and export everything to CSV
+  (with Availability and Events columns).
   `POST /api/volunteers` is public and rate-limited, same pattern as
   membership signup; everything else under `/api/volunteers` is admin/board
   only.
@@ -153,6 +158,7 @@ psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
 psql "$DATABASE_URL" -f db/migrations/028_square_payment_links.sql
 psql "$DATABASE_URL" -f db/migrations/029_cultural_groups_without_member.sql
 psql "$DATABASE_URL" -f db/migrations/030_bylaw_documents.sql
+psql "$DATABASE_URL" -f db/migrations/031_volunteer_availability.sql
 #
 # EXISTING database created before those migrations existed: instead run
 # whichever incremental migrations you're missing, in order:
@@ -185,6 +191,7 @@ psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
 psql "$DATABASE_URL" -f db/migrations/028_square_payment_links.sql
 psql "$DATABASE_URL" -f db/migrations/029_cultural_groups_without_member.sql
 psql "$DATABASE_URL" -f db/migrations/030_bylaw_documents.sql
+psql "$DATABASE_URL" -f db/migrations/031_volunteer_availability.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -468,8 +475,11 @@ are not interchangeable — each only works against its own set of routes.
   (`NULL` = currently serving), `display_order` — see "Board Roster"
   above.
 - `volunteers` — name, contact info, `interests` (a text array of interest
-  keys), free-text `note`, and `status` (new/contacted/active/inactive) —
+  keys), free-text `note`, `availability` (`event_specific` / `all_time`,
+  NULL for older signups) and `status` (new/contacted/active/inactive) —
   see "Volunteers" above.
+- `volunteer_events` — which event(s) an event-specific volunteer offered to
+  help at (`volunteer_id`, `event_id`; cascades when either is deleted).
 
 See `db/schema.sql` for the full schema (fresh installs), or
 `db/migrations/` for incremental changes to an existing database.

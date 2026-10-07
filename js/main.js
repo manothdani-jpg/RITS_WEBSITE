@@ -507,6 +507,38 @@
   }
 
   /* ---------------- Volunteer signup — posts to the RITS API ---------------- */
+  // "Specific event(s)" reveals a checklist of upcoming events to pick from.
+  function updateVolunteerEventsRow() {
+    var row = document.getElementById("v-events-row");
+    if (!row) return;
+    var chosen = document.querySelector('#panel-volunteer input[name="availability"]:checked');
+    row.hidden = !(chosen && chosen.value === "event_specific");
+  }
+  (async function loadVolunteerEvents() {
+    var list = document.getElementById("v-events-list");
+    if (!list) return;
+    var radios = document.querySelectorAll('#panel-volunteer input[name="availability"]');
+    Array.prototype.forEach.call(radios, function (r) { r.addEventListener("change", updateVolunteerEventsRow); });
+    try {
+      var res = await fetch((window.RITS_API_BASE || "") + "/events");
+      if (!res.ok) return;
+      var data = await res.json();
+      var now = Date.now();
+      var upcoming = data.events.filter(function (ev) { return new Date(ev.event_date).getTime() >= now; });
+      if (!upcoming.length) {
+        document.getElementById("v-events-empty").hidden = false;
+        return;
+      }
+      list.innerHTML = upcoming.map(function (ev) {
+        var when = new Date(ev.event_date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+        return '<label class="checkbox-choice"><input type="checkbox" name="event_ids" value="' + ev.id + '"> ' +
+          escapeHtmlLite(ev.name) + " &middot; " + when + "</label>";
+      }).join("");
+    } catch (err) {
+      // Backend not running — the picker stays empty; the form submit will report the error.
+    }
+  })();
+
   var volunteerForm = document.getElementById("panel-volunteer");
   var volunteerStatus = document.getElementById("volunteer-status");
   var volunteerSubmit = document.getElementById("volunteer-submit");
@@ -528,7 +560,27 @@
         .call(volunteerForm.querySelectorAll('input[name="interests"]:checked'))
         .map(function (el) { return el.value; });
 
+      var availabilityEl = volunteerForm.querySelector('input[name="availability"]:checked');
+      var availability = availabilityEl ? availabilityEl.value : "";
+      var eventIds = Array.prototype.slice
+        .call(volunteerForm.querySelectorAll('input[name="event_ids"]:checked'))
+        .map(function (el) { return el.value; });
+      if (!availability) {
+        setVolunteerStatus("Please choose whether you can volunteer for specific events or all the time.", "error");
+        volunteerSubmit.disabled = false;
+        volunteerSubmit.textContent = "Sign Up to Volunteer";
+        return;
+      }
+      if (availability === "event_specific" && !eventIds.length) {
+        setVolunteerStatus("Please pick at least one event you can volunteer for.", "error");
+        volunteerSubmit.disabled = false;
+        volunteerSubmit.textContent = "Sign Up to Volunteer";
+        return;
+      }
+
       var payload = {
+        availability: availability,
+        event_ids: availability === "event_specific" ? eventIds : undefined,
         first_name: document.getElementById("v-first-name").value.trim(),
         last_name: document.getElementById("v-last-name").value.trim(),
         email: document.getElementById("v-email").value.trim(),
@@ -552,6 +604,7 @@
 
         setVolunteerStatus("Thanks, " + data.volunteer.first_name + "! A board member will reach out about next steps.", "success");
         volunteerForm.reset();
+        updateVolunteerEventsRow();
       } catch (err) {
         var msg = err.message === "Failed to fetch"
           ? "Couldn't reach the server. Please try again later or contact us directly."
