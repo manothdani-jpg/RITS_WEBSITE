@@ -507,7 +507,8 @@ router.post("/webhook", async (req, res) => {
 async function fetchPaymentDetail(whereSql, param) {
   const { rows } = await db.query(
     `SELECT p.id, p.member_id, p.purpose, p.tier, p.rsvp_id, p.cultural_group_id, p.status, p.amount_cents, p.pending_selections,
-            m.first_name, m.email,
+            COALESCE(m.first_name, split_part(cg.choreographer_name, ' ', 1)) AS first_name,
+            COALESCE(m.email, cg.choreographer_email) AS email,
             m.payment_status AS member_payment_status,
             to_char(m.renewal_date, 'YYYY-MM-DD') AS member_renewal_date,
             e.name AS event_name,
@@ -516,7 +517,7 @@ async function fetchPaymentDetail(whereSql, param) {
             mc.label AS tier_label,
             mc.renewal_type, mc.renewal_months, mc.renewal_month, mc.renewal_day
      FROM payments p
-     JOIN members m ON m.id = p.member_id
+     LEFT JOIN members m ON m.id = p.member_id
      LEFT JOIN events e ON e.id = p.event_id
      LEFT JOIN cultural_groups cg ON cg.id = p.cultural_group_id
      LEFT JOIN membership_categories mc ON mc.key = p.tier
@@ -639,9 +640,12 @@ router.get("/", requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "Invalid event_id" });
   }
   const { rows } = await db.query(
-    `SELECT p.*, m.first_name, m.last_name, m.email, e.name AS event_name
+    `SELECT p.*, COALESCE(m.first_name, split_part(cg.choreographer_name, ' ', 1)) AS first_name,
+            COALESCE(m.last_name, NULLIF(btrim(substr(cg.choreographer_name, length(split_part(cg.choreographer_name, ' ', 1)) + 1)), '')) AS last_name,
+            COALESCE(m.email, cg.choreographer_email) AS email, e.name AS event_name
      FROM payments p
-     JOIN members m ON m.id = p.member_id
+     LEFT JOIN members m ON m.id = p.member_id
+     LEFT JOIN cultural_groups cg ON cg.id = p.cultural_group_id
      LEFT JOIN events e ON e.id = p.event_id
      WHERE ($1::uuid IS NULL OR p.event_id = $1)
      ORDER BY p.created_at DESC LIMIT 200`,

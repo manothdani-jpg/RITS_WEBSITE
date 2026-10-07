@@ -408,10 +408,13 @@ router.get("/event-report.xlsx", async (req, res) => {
     // Registrations), and sheet names mirror those section headers, so
     // it's obvious which tab holds which part of what's on screen.
     const payments = await db.query(
-      `SELECT p.created_at, m.first_name, m.last_name, m.email, p.purpose, mc.label AS tier_label,
+      `SELECT p.created_at, COALESCE(m.first_name, split_part(cg.choreographer_name, ' ', 1)) AS first_name,
+              COALESCE(m.last_name, NULLIF(btrim(substr(cg.choreographer_name, length(split_part(cg.choreographer_name, ' ', 1)) + 1)), '')) AS last_name,
+              COALESCE(m.email, cg.choreographer_email) AS email, p.purpose, mc.label AS tier_label,
               e.name AS event_name, p.amount_cents, p.method, p.status
        FROM payments p
-       JOIN members m ON m.id = p.member_id
+       LEFT JOIN members m ON m.id = p.member_id
+       LEFT JOIN cultural_groups cg ON cg.id = p.cultural_group_id
        LEFT JOIN events e ON e.id = p.event_id
        LEFT JOIN membership_categories mc ON mc.key = p.tier
        WHERE ($1::uuid IS NULL OR p.event_id = $1)

@@ -144,6 +144,7 @@ psql "$DATABASE_URL" -f db/migrations/025_admin_password_reset.sql
 psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
 psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
 psql "$DATABASE_URL" -f db/migrations/028_square_payment_links.sql
+psql "$DATABASE_URL" -f db/migrations/029_cultural_groups_without_member.sql
 #
 # EXISTING database created before those migrations existed: instead run
 # whichever incremental migrations you're missing, in order:
@@ -174,6 +175,7 @@ psql "$DATABASE_URL" -f db/migrations/025_admin_password_reset.sql
 psql "$DATABASE_URL" -f db/migrations/026_rsvp_remarks.sql
 psql "$DATABASE_URL" -f db/migrations/027_membership_renewal_rules.sql
 psql "$DATABASE_URL" -f db/migrations/028_square_payment_links.sql
+psql "$DATABASE_URL" -f db/migrations/029_cultural_groups_without_member.sql
 
 # 5. Create your first Super Admin login
 ADMIN_EMAIL=you@example.org ADMIN_PASSWORD=choose-a-strong-password ADMIN_NAME="Your Name" npm run db:seed
@@ -431,8 +433,9 @@ are not interchangeable — each only works against its own set of routes.
   its history.
 - `cultural_groups` — one row per group registration submitted at
   `../cultural-registration.html` (see "Cultural event group registration"
-  above): event, group/performance details, the resolved choreographer
-  member, total `amount_cents`, and `status`
+  above): event, group/performance details, the choreographer's contact
+  details (no member record — `choreographer_member_id` is legacy/optional),
+  total `amount_cents`, and `status`
   (pending_payment/registered/cancelled).
   `events.cultural_member_fee_cents` / `cultural_non_member_fee_cents`
   (both `NULL` by default) hold the flat per-participant fee — `NULL`/`NULL`
@@ -791,10 +794,12 @@ land on a form for an event that isn't actually open.
 **What the form collects:** group name, performance type, description,
 choreographer/trainer name + email + phone, and a dynamic list of
 participants (full name, optional email, Adult/Kid). The choreographer
-doesn't need to already be a RITS member — like front-desk walk-ins, one
-is created for them on the fly (reusing an existing record if their email
-matches one), so there's always a valid `members` row to hang the
-registration and payment on.
+is just a contact: no `members` row is created for them (migration 029), so
+registering a group never adds anyone to the Members list or the member
+portal. Membership is only *looked up* — by each participant's email — to
+decide member vs non-member pricing. The group stores the contact's
+name/email/phone itself, and the group's payment has no `member_id`; admin
+payment lists, exports and confirmation emails fall back to those details.
 
 **Fee logic:** membership status only — each participant's fee is their
 event's member or non-member rate, looked up by email against `members`.

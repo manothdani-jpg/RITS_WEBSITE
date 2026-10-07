@@ -136,8 +136,9 @@ router.post("/quote", quoteLimiter, async (req, res) => {
 
 /* ============================================================
    POST /api/cultural-groups — public: a choreographer/trainer
-   registers a performance group with N participants. Each
-   participant's membership is checked by email (if given) and their
+   registers a performance group with N participants. The registrant is
+   NOT created as a member — membership is only looked up (by email) to
+   price each participant. Each participant's membership is checked and their
    fee is set to the event's member/non-member cultural fee
    accordingly. Pays via Square for the group's total, unless the
    event's cultural fees are both $0. Call /quote first to show the
@@ -172,32 +173,14 @@ router.post("/", submitLimiter, async (req, res) => {
       return res.status(400).json({ error: "Cultural group registration isn't open for this event." });
     }
 
-    // Resolve or create the choreographer as a member, same pattern as
-    // front-desk walk-ins — they don't need to already be a RITS member.
-    let choreographer;
-    const existingChoreographer = await db.query("SELECT * FROM members WHERE email = $1", [choreographer_email]);
-    if (existingChoreographer.rows[0]) {
-      choreographer = existingChoreographer.rows[0];
-    } else {
-      const nameParts = choreographer_name.trim().split(/\s+/);
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(" ") || firstName;
-      const created = await db.query(
-        `INSERT INTO members (first_name, last_name, email, phone, membership_tier, payment_status)
-         VALUES ($1, $2, $3, $4, 'individual', 'pending') RETURNING *`,
-        [firstName, lastName, choreographer_email, choreographer_phone || null]
-      );
-      choreographer = created.rows[0];
-    }
-
     const { resolved, amountCents } = await resolveParticipantFees(event, participants);
 
     const groupStatus = amountCents === 0 ? "registered" : "pending_payment";
     const groupResult = await db.query(
       `INSERT INTO cultural_groups
-         (event_id, group_name, choreographer_member_id, choreographer_name, choreographer_email, choreographer_phone, performance_type, description, amount_cents, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-      [event_id, group_name.trim(), choreographer.id, choreographer_name.trim(), choreographer_email, choreographer_phone || null, performance_type, description || null, amountCents, groupStatus]
+         (event_id, group_name, choreographer_name, choreographer_email, choreographer_phone, performance_type, description, amount_cents, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [event_id, group_name.trim(), choreographer_name.trim(), choreographer_email, choreographer_phone || null, performance_type, description || null, amountCents, groupStatus]
     );
     const groupId = groupResult.rows[0].id;
 
@@ -222,9 +205,9 @@ router.post("/", submitLimiter, async (req, res) => {
     }
 
     const paymentRow = await db.query(
-      `INSERT INTO payments (member_id, purpose, cultural_group_id, event_id, amount_cents, status)
-       VALUES ($1, 'cultural_group', $2, $3, $4, 'pending') RETURNING id`,
-      [choreographer.id, groupId, event_id, amountCents]
+      `INSERT INTO payments (purpose, cultural_group_id, event_id, amount_cents, status)
+       VALUES ('cultural_group', $1, $2, $3, 'pending') RETURNING id`,
+      [groupId, event_id, amountCents]
     );
     const paymentId = paymentRow.rows[0].id;
 
