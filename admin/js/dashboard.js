@@ -1820,7 +1820,7 @@
           '<span class="pill">Kids: <strong style="margin-left:.3em;">' + kids + "</strong></span>" +
           '<span class="badge ' + statusClass + '" style="align-self:center;">' + escapeHtml(g.status.replace("_", " ")) + "</span>" +
           "</div>" +
-          '<p class="empty-note" style="padding:.6rem 0 0; margin:0;">Choreographer/Trainer: ' + escapeHtml(g.choreographer_name) +
+          '<p class="empty-note" style="padding:.6rem 0 0; margin:0;">Choreographer/Coordinator: ' + escapeHtml(g.choreographer_name) +
           " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ")</p>" +
           participantsTable +
           "</div>"
@@ -2144,7 +2144,7 @@
       document.getElementById("cultural-group-modal-title").textContent = g.group_name;
       document.getElementById("cultural-group-info").innerHTML =
         escapeHtml(g.event_name) + " &middot; " + (PERFORMANCE_TYPE_LABELS[g.performance_type] || g.performance_type) + "<br>" +
-        "Choreographer/Trainer: " + escapeHtml(g.choreographer_name) + " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ")" +
+        "Choreographer/Coordinator: " + escapeHtml(g.choreographer_name) + " (" + escapeHtml(g.choreographer_email) + (g.choreographer_phone ? ", " + escapeHtml(g.choreographer_phone) : "") + ")" +
         (g.description ? "<br>" + escapeHtml(g.description) : "") +
         "<br>Total: " + fmtMoney(g.amount_cents) + " &middot; Status: " + escapeHtml(g.status.replace("_", " "));
 

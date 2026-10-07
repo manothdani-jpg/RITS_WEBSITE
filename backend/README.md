@@ -776,7 +776,7 @@ if prices were edited since.
 ## Cultural event group registration
 
 `../cultural-registration.html` is a public form (no login required) where
-a choreographer or trainer registers a performance group — dance,
+a choreographer or coordinator registers a performance group — dance,
 singing, drama, speech, or other — for a specific event, listing every
 participant in one submission. It's a genuinely different shape from
 regular event RSVPs: one submission → many people, each individually
@@ -792,7 +792,7 @@ picker only ever lists events where both are set, so there's no way to
 land on a form for an event that isn't actually open.
 
 **What the form collects:** group name, performance type, description,
-choreographer/trainer name + email + phone, and a dynamic list of
+choreographer/coordinator name + email + phone, and a dynamic list of
 participants (full name, optional email, Adult/Kid). The choreographer
 is just a contact: no `members` row is created for them (migration 029), so
 registering a group never adds anyone to the Members list or the member

@@ -135,7 +135,7 @@ router.post("/quote", quoteLimiter, async (req, res) => {
 });
 
 /* ============================================================
-   POST /api/cultural-groups — public: a choreographer/trainer
+   POST /api/cultural-groups — public: a choreographer/coordinator
    registers a performance group with N participants. The registrant is
    NOT created as a member — membership is only looked up (by email) to
    price each participant. Each participant's membership is checked and their
@@ -154,7 +154,7 @@ router.post("/", submitLimiter, async (req, res) => {
     return res.status(400).json({ error: "event_id, group_name, choreographer_name, choreographer_email, choreographer_phone, and performance_type are required" });
   }
   if (!EMAIL_RE.test(choreographer_email)) {
-    return res.status(400).json({ error: "A valid choreographer/trainer email is required" });
+    return res.status(400).json({ error: "A valid choreographer/coordinator email is required" });
   }
   if (!PERFORMANCE_TYPES.includes(performance_type)) {
     return res.status(400).json({ error: `performance_type must be one of: ${PERFORMANCE_TYPES.join(", ")}` });

@@ -318,7 +318,7 @@ function addCulturalSheets(workbook, groups) {
       { header: "Event", key: "event_name", width: 26 },
       { header: "Event Date", key: "event_date", width: 18, type: "date" },
       { header: "Type", key: "type", width: 12 },
-      { header: "Choreographer / Trainer", key: "choreographer_name", width: 26 },
+      { header: "Choreographer / Coordinator", key: "choreographer_name", width: 26 },
       { header: "Email", key: "choreographer_email", width: 30 },
       { header: "Phone", key: "choreographer_phone", width: 16 },
       { header: "Participant Count", key: "participant_count", width: 16 },
