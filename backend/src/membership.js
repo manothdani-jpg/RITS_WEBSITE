@@ -22,4 +22,13 @@ function computeRenewalDate(category, fromDate) {
   return result;
 }
 
-module.exports = { computeRenewalDate };
+// SQL boolean expression for "is this member currently entitled to member
+// pricing/benefits": dues paid AND the membership hasn't passed its end date
+// (the renewal date itself is still covered; a paid member with no date on
+// file is treated as active). `alias` is the members table alias with its dot,
+// e.g. "m.". Single source of truth so every price check agrees.
+function activeMemberSql(alias = "") {
+  return `(${alias}payment_status = 'paid' AND (${alias}renewal_date IS NULL OR ${alias}renewal_date >= CURRENT_DATE))`;
+}
+
+module.exports = { computeRenewalDate, activeMemberSql };

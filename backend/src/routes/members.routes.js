@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireAdmin, requireMember } = require("../middleware/auth");
+const { activeMemberSql } = require("../membership");
 
 const router = express.Router();
 
@@ -124,7 +125,10 @@ router.post("/signup", signupLimiter, async (req, res) => {
    ============================================================ */
 
 router.get("/me", requireMember, async (req, res) => {
-  const { rows } = await db.query("SELECT * FROM members WHERE id = $1", [req.member.sub]);
+  const { rows } = await db.query(
+    `SELECT *, ${activeMemberSql()} AS is_active_member FROM members WHERE id = $1`,
+    [req.member.sub]
+  );
   const member = rows[0];
   if (!member) return res.status(404).json({ error: "Member not found" });
   stripSecrets(member);

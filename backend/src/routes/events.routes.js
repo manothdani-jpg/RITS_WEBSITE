@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const db = require("../db");
+const { activeMemberSql } = require("../membership");
 const { requireAdmin, requireMember } = require("../middleware/auth");
 const { makeUploader, UPLOADS_ROOT } = require("../upload");
 const { buildCalendar } = require("../ics");
@@ -276,7 +277,7 @@ router.put("/:id/cultural-pricing", async (req, res) => {
 router.get("/:id/rsvps", async (req, res) => {
   const { rows } = await db.query(
     `SELECT r.*, m.first_name, m.last_name, m.email,
-            (m.payment_status = 'paid') AS is_member
+            ${activeMemberSql("m.")} AS is_member
      FROM rsvps r JOIN members m ON m.id = r.member_id
      WHERE r.event_id = $1 ORDER BY r.created_at`,
     [req.params.id]

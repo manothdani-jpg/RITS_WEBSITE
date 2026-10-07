@@ -6,7 +6,7 @@ const { requireMember, requireAdmin } = require("../middleware/auth");
 const { refundPayment, WebhooksHelper } = require("../square");
 const { createCheckout } = require("../checkout");
 const { sendEmail, formatMoney } = require("../email");
-const { computeRenewalDate } = require("../membership");
+const { computeRenewalDate, activeMemberSql } = require("../membership");
 
 const router = express.Router();
 
@@ -117,8 +117,8 @@ router.post("/event-checkout", checkoutLimiter, requireMember, async (req, res) 
       return res.status(409).json({ error: "You're already registered for this event — use the add-on purchase option to buy more." });
     }
 
-    const memberResult = await db.query("SELECT payment_status FROM members WHERE id = $1", [req.member.sub]);
-    const isActiveMember = memberResult.rows[0] && memberResult.rows[0].payment_status === "paid";
+    const memberResult = await db.query(`SELECT ${activeMemberSql()} AS is_active FROM members WHERE id = $1`, [req.member.sub]);
+    const isActiveMember = !!(memberResult.rows[0] && memberResult.rows[0].is_active);
 
     const optionsResult = await db.query(
       "SELECT id, kind, label, member_amount_cents, non_member_amount_cents FROM event_pricing_options WHERE event_id = $1",
@@ -250,8 +250,8 @@ router.post("/event-addon-checkout", checkoutLimiter, requireMember, async (req,
       return res.status(400).json({ error: "Register for this event first before buying add-ons." });
     }
 
-    const memberResult = await db.query("SELECT payment_status FROM members WHERE id = $1", [req.member.sub]);
-    const isActiveMember = memberResult.rows[0] && memberResult.rows[0].payment_status === "paid";
+    const memberResult = await db.query(`SELECT ${activeMemberSql()} AS is_active FROM members WHERE id = $1`, [req.member.sub]);
+    const isActiveMember = !!(memberResult.rows[0] && memberResult.rows[0].is_active);
     const priceQualifier = isActiveMember ? "" : " (non-member price)";
 
     const optionsResult = await db.query(

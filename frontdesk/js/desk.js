@@ -63,12 +63,12 @@
   var currentEventId = null;
   var currentOptions = [];
   var currentAttendees = [];
-  var selectedPerson = null; // { id, first_name, last_name, email, payment_status } or { isWalkin:true, ... }
+  var selectedPerson = null; // { id, first_name, last_name, email, payment_status, is_active_member } or { isWalkin:true, ... }
   var selectedMethod = null;
   var registrationMode = "register"; // or "add-items"
 
   function isActiveMember(person) {
-    return person && person.payment_status === "paid";
+    return !!(person && person.is_active_member);
   }
   function priceFor(opt, person) {
     return isActiveMember(person) ? opt.member_amount_cents : opt.non_member_amount_cents;
@@ -161,7 +161,7 @@
             '<button type="button" class="search-result-row" data-member-id="' + m.id + '">' +
             '<span><span class="sr-name">' + escapeHtml(m.first_name + " " + m.last_name) + '</span><br>' +
             '<span class="sr-detail">' + escapeHtml(m.email) + (m.phone ? " · " + escapeHtml(m.phone) : "") + "</span></span>" +
-            '<span class="badge ' + (m.payment_status === "paid" ? "badge-paid" : "badge-tier") + '">' + escapeHtml(m.payment_status) + "</span>" +
+            '<span class="badge ' + (m.is_active_member ? "badge-paid" : "badge-tier") + '">' + escapeHtml(m.payment_status === "paid" && !m.is_active_member ? "expired" : m.payment_status) + "</span>" +
             "</button>"
           );
         }).join("") || '<p class="empty-note">No matches.</p>';

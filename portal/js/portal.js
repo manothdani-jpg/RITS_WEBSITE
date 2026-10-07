@@ -88,7 +88,8 @@
   var currentRsvps = [];
   var allEvents = [];
   var currentMember = null;
-  function isActiveMember() { return currentMember && currentMember.payment_status === "paid"; }
+  // Server-computed: dues paid AND the membership hasn't passed its end date.
+  function isActiveMember() { return !!(currentMember && currentMember.is_active_member); }
   function priceFor(o) { return isActiveMember() ? o.member_amount_cents : o.non_member_amount_cents; }
 
   /* ---------------- Membership status + renewal ---------------- */
@@ -125,7 +126,7 @@
       label = "Waived"; badge = "badge-waived"; showButton = false;
       note = "Your dues are waived — there's nothing to pay.";
     } else if (m.payment_status === "paid") {
-      if (daysLeft !== null && daysLeft <= 0) {
+      if (daysLeft !== null && daysLeft < 0) {
         label = "Expired"; badge = "badge-overdue";
         note = "Your membership has expired. Renew to get member pricing and benefits back.";
       } else if (daysLeft !== null && daysLeft <= EXPIRING_SOON_DAYS) {
@@ -561,7 +562,7 @@
       : "";
 
     var nonMemberNotice = !isActiveMember() && options.some(function (o) { return o.non_member_amount_cents !== o.member_amount_cents; })
-      ? '<p class="empty-note" style="margin:.35rem 0 0;">Non-member pricing applies — pay your dues for member pricing.</p>'
+      ? '<p class="empty-note" style="margin:.35rem 0 0;">Non-member pricing applies — ' + (currentMember && currentMember.payment_status === "paid" ? "renew your membership" : "pay your dues") + ' for member pricing.</p>'
       : "";
 
     var initialTotal = 0;

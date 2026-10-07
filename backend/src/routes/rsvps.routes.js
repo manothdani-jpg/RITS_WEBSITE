@@ -3,6 +3,7 @@ const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireAdmin, requireMember } = require("../middleware/auth");
 const { sendEmail } = require("../email");
+const { activeMemberSql } = require("../membership");
 
 const router = express.Router();
 
@@ -52,7 +53,7 @@ router.post("/", rsvpLimiter, async (req, res) => {
     return res.status(400).json({ error: "email and event_id are required" });
   }
 
-  const memberResult = await db.query("SELECT id, first_name, payment_status FROM members WHERE email = $1", [email]);
+  const memberResult = await db.query(`SELECT id, first_name, ${activeMemberSql()} AS is_active FROM members WHERE email = $1`, [email]);
   const member = memberResult.rows[0];
   if (!member) {
     return res.status(404).json({ error: "No member found with that email. Please become a member first." });
@@ -63,7 +64,7 @@ router.post("/", rsvpLimiter, async (req, res) => {
   }
 
   try {
-    const isMember = member.payment_status === "paid";
+    const isMember = !!member.is_active;
     const { rows } = await db.query(
       `INSERT INTO rsvps (member_id, event_id, guest_count, member_at_registration)
        VALUES ($1,$2,$3,$4)
@@ -95,8 +96,8 @@ router.post("/me", rsvpLimiter, requireMember, async (req, res) => {
   }
 
   try {
-    const memberResult = await db.query("SELECT payment_status FROM members WHERE id = $1", [req.member.sub]);
-    const isMember = memberResult.rows[0] && memberResult.rows[0].payment_status === "paid";
+    const memberResult = await db.query(`SELECT ${activeMemberSql()} AS is_active FROM members WHERE id = $1`, [req.member.sub]);
+    const isMember = !!(memberResult.rows[0] && memberResult.rows[0].is_active);
     const { rows } = await db.query(
       `INSERT INTO rsvps (member_id, event_id, guest_count, member_at_registration)
        VALUES ($1,$2,$3,$4)

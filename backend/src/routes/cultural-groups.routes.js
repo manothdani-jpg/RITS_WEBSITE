@@ -4,6 +4,7 @@ const db = require("../db");
 const { requireAdmin } = require("../middleware/auth");
 const { createCheckout } = require("../checkout");
 const { sendEmail, formatMoney } = require("../email");
+const { activeMemberSql } = require("../membership");
 
 const router = express.Router();
 
@@ -85,10 +86,10 @@ async function resolveParticipantFees(event, participants) {
   for (const p of participants) {
     let memberRow = null;
     if (p.email) {
-      const found = await db.query("SELECT id, payment_status FROM members WHERE email = $1", [p.email]);
+      const found = await db.query(`SELECT id, ${activeMemberSql()} AS is_active FROM members WHERE email = $1`, [p.email]);
       memberRow = found.rows[0] || null;
     }
-    const isMember = !!(memberRow && memberRow.payment_status === "paid");
+    const isMember = !!(memberRow && memberRow.is_active);
     const feeCents = isMember ? event.cultural_member_fee_cents : event.cultural_non_member_fee_cents;
     amountCents += feeCents;
     resolved.push({

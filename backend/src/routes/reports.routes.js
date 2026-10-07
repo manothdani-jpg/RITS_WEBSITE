@@ -1,5 +1,6 @@
 const express = require("express");
 const db = require("../db");
+const { activeMemberSql } = require("../membership");
 const { requireAdmin } = require("../middleware/auth");
 const { ExcelJS, addSheet, sendWorkbook } = require("../xlsx");
 const { formatMoney } = require("../email");
@@ -136,7 +137,7 @@ async function getRsvpBreakdown(eventId) {
   const registrantsResult = await db.query(
     `SELECT r.id AS rsvp_id, r.event_id, r.amount_cents, r.status, r.member_at_registration,
             m.first_name, m.last_name, m.email,
-            (m.payment_status = 'paid') AS is_member
+            ${activeMemberSql("m.")} AS is_member
      FROM rsvps r JOIN members m ON m.id = r.member_id
      WHERE r.status != 'cancelled' AND ($1::uuid IS NULL OR r.event_id = $1)
      ORDER BY r.event_id, r.created_at`,

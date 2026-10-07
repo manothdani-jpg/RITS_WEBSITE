@@ -5,6 +5,7 @@ const db = require("../db");
 const { requireDesk } = require("../middleware/auth");
 const { createCheckout } = require("../checkout");
 const { sendEmail, formatMoney } = require("../email");
+const { activeMemberSql } = require("../membership");
 
 const router = express.Router();
 router.use(requireDesk);
@@ -50,7 +51,7 @@ router.get("/events/:id", async (req, res) => {
 router.get("/events/:id/attendees", async (req, res) => {
   const { rows } = await db.query(
     `SELECT r.*, m.first_name, m.last_name, m.email, m.phone,
-            (m.payment_status = 'paid') AS is_member
+            ${activeMemberSql("m.")} AS is_member
      FROM rsvps r JOIN members m ON m.id = r.member_id
      WHERE r.event_id = $1 ORDER BY r.created_at`,
     [req.params.id]
@@ -113,7 +114,8 @@ router.get("/members/search", async (req, res) => {
   if (q.length < 2) return res.json({ members: [] });
 
   const { rows } = await db.query(
-    `SELECT id, first_name, last_name, email, phone, membership_tier, payment_status
+    `SELECT id, first_name, last_name, email, phone, membership_tier, payment_status, renewal_date,
+            ${activeMemberSql()} AS is_active_member
      FROM members
      WHERE first_name ILIKE $1 OR last_name ILIKE $1 OR email ILIKE $1
        OR (first_name || ' ' || last_name) ILIKE $1
@@ -165,7 +167,7 @@ router.put("/rsvps/:id/remarks", async (req, res) => {
 
 async function resolveOrCreateMember({ member_id, first_name, last_name, email, phone }) {
   if (member_id) {
-    const { rows } = await db.query("SELECT * FROM members WHERE id = $1", [member_id]);
+    const { rows } = await db.query(`SELECT *, ${activeMemberSql()} AS is_active_member FROM members WHERE id = $1`, [member_id]);
     if (!rows[0]) throw Object.assign(new Error("Member not found"), { status: 404 });
     return rows[0];
   }
@@ -175,7 +177,7 @@ async function resolveOrCreateMember({ member_id, first_name, last_name, email, 
   }
 
   if (email) {
-    const existing = await db.query("SELECT * FROM members WHERE email = $1", [email]);
+    const existing = await db.query(`SELECT *, ${activeMemberSql()} AS is_active_member FROM members WHERE email = $1`, [email]);
     if (existing.rows[0]) return existing.rows[0];
   }
   const finalEmail = email || `walkin-${crypto.randomUUID()}@no-email.ritamilsangam.local`;
@@ -183,7 +185,7 @@ async function resolveOrCreateMember({ member_id, first_name, last_name, email, 
   const { rows } = await db.query(
     `INSERT INTO members (first_name, last_name, email, phone, membership_tier, payment_status)
      VALUES ($1, $2, $3, $4, 'individual', 'pending')
-     RETURNING *`,
+     RETURNING *, false AS is_active_member`,
     [first_name, last_name, finalEmail, phone || null]
   );
   return rows[0];
@@ -299,7 +301,7 @@ router.post("/events/:id/register", async (req, res) => {
       return res.status(409).json({ error: "This person is already registered for this event — use the add-items option to add more." });
     }
 
-    const isActiveMember = member.payment_status === "paid";
+    const isActiveMember = !!member.is_active_member;
     const optionsResult = await db.query(
       "SELECT id, kind, label, member_amount_cents, non_member_amount_cents FROM event_pricing_options WHERE event_id = $1",
       [eventId]
@@ -407,7 +409,7 @@ router.post("/events/:id/add-items", async (req, res) => {
     const event = eventResult.rows[0];
     if (!event) return res.status(404).json({ error: "Event not found" });
 
-    const memberResult = await db.query("SELECT id, first_name, last_name, email, payment_status FROM members WHERE id = $1", [member_id]);
+    const memberResult = await db.query(`SELECT id, first_name, last_name, email, payment_status, ${activeMemberSql()} AS is_active_member FROM members WHERE id = $1`, [member_id]);
     const member = memberResult.rows[0];
     if (!member) return res.status(404).json({ error: "Member not found" });
 
@@ -424,7 +426,7 @@ router.post("/events/:id/add-items", async (req, res) => {
       await db.query("UPDATE rsvps SET remarks = $1 WHERE id = $2", [cleanRemarks, rsvp.id]);
     }
 
-    const isActiveMember = member.payment_status === "paid";
+    const isActiveMember = !!member.is_active_member;
     const optionsResult = await db.query(
       "SELECT id, kind, label, member_amount_cents, non_member_amount_cents FROM event_pricing_options WHERE event_id = $1 AND kind = 'addon'",
       [eventId]
