@@ -1963,6 +1963,7 @@
           "<td>" + escapeHtml(v.first_name + " " + v.last_name) + "</td>" +
           "<td>" + escapeHtml(v.email) + "</td>" +
           "<td>" + escapeHtml(v.phone || "—") + "</td>" +
+          "<td>" + memberBadge(v.is_member) + "</td>" +
           "<td>" + volunteerAvailabilityHtml(v) + "</td>" +
           "<td>" + escapeHtml(interests) + "</td>" +
           "<td>" + escapeHtml(v.note || "—") + "</td>" +

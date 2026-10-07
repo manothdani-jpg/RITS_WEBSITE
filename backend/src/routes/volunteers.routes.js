@@ -2,6 +2,7 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { requireAdmin } = require("../middleware/auth");
+const { activeMemberSql } = require("../membership");
 
 const router = express.Router();
 
@@ -15,6 +16,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Volunteers with the event(s) they signed up for (empty for all-time).
 const VOLUNTEERS_WITH_EVENTS_SQL = `
   SELECT v.*,
+         EXISTS (SELECT 1 FROM members m WHERE lower(m.email) = lower(v.email) AND ${activeMemberSql("m.")}) AS is_member,
          COALESCE(
            (SELECT json_agg(json_build_object('id', e.id, 'name', e.name, 'event_date', e.event_date) ORDER BY e.event_date)
             FROM volunteer_events ve JOIN events e ON e.id = ve.event_id
@@ -114,7 +116,7 @@ router.delete("/:id", async (req, res) => {
 router.get("/export.csv", async (req, res) => {
   const { rows } = await db.query(`${VOLUNTEERS_WITH_EVENTS_SQL} ORDER BY v.last_name, v.first_name`);
 
-  const headers = ["First Name", "Last Name", "Email", "Phone", "Availability", "Events", "Interests", "Status", "Note", "Signed Up"];
+  const headers = ["First Name", "Last Name", "Email", "Phone", "RITS Member", "Availability", "Events", "Interests", "Status", "Note", "Signed Up"];
   const csvEscape = (v) => {
     if (v === null || v === undefined) return "";
     const s = String(v);
@@ -126,6 +128,7 @@ router.get("/export.csv", async (req, res) => {
     lines.push(
       [
         v.first_name, v.last_name, v.email, v.phone,
+        v.is_member ? "Member" : "Non-member",
         AVAILABILITY_LABELS[v.availability] || "",
         (v.events || []).map((e) => e.name).join("; "),
         (v.interests || []).join("; "), v.status, v.note,
